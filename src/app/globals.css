@@ -163,3 +163,99 @@ body::before {
   background: linear-gradient(to bottom, #00fff9, #ff00ff);
   opacity: 0.8;
 }
+
+/* Circuit Lines Animation */
+.circuit-lines {
+  background-image: 
+    linear-gradient(to right, rgba(0, 255, 249, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 255, 249, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: circuitFlow 20s linear infinite;
+}
+
+@keyframes circuitFlow {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 50px 50px;
+  }
+}
+
+/* Cyber Particles */
+.cyber-particles {
+  background-image: radial-gradient(
+    circle,
+    rgba(0, 255, 249, 0.1) 1px,
+    transparent 1px
+  );
+  background-size: 30px 30px;
+  animation: particleFloat 15s ease-in-out infinite alternate;
+}
+
+@keyframes particleFloat {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 15px 15px;
+  }
+}
+
+/* Scan Lines */
+.scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 255, 249, 0.05) 0.5px,
+    transparent 1px
+  );
+  background-size: 100% 3px;
+  animation: scanAnimation 10s linear infinite;
+}
+
+@keyframes scanAnimation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 100%;
+  }
+}
+
+/* Vignette Effect */
+.vignette {
+  background: radial-gradient(
+    circle,
+    transparent 50%,
+    rgba(0, 0, 0, 0.5) 150%
+  );
+}
+
+/* Gradient Radial */
+.bg-gradient-radial {
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 255, 249, 0.1) 0%,
+    rgba(255, 0, 255, 0.1) 50%,
+    transparent 100%
+  );
+}
+
+/* Grid Pattern */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Add glow effects to important elements */
+.glow-hover {
+  transition: all 0.3s ease;
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 15px rgba(0, 255, 249, 0.5);
+  text-shadow: 0 0 5px rgba(0, 255, 249, 0.5);
+}
