@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🌟 CyberMorph - Neural Image Transformation Protocol
 
-## Getting Started
+A cyberpunk-themed image converter built with Next.js, featuring a sleek, futuristic UI and powerful image processing capabilities.
 
-First, run the development server:
+![CyberMorph Banner](public/og-image.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Elegant Cyberpunk Interface**: Neon accents, glass morphism, and futuristic animations
+- **Drag & Drop**: Intuitive file upload with visual feedback
+- **Multiple Format Support**: Convert to WebP, PNG, and JPG
+- **Real-time Preview**: View your image before conversion
+- **Progress Tracking**: Visual feedback during conversion
+- **Responsive Design**: Fully functional on all devices
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Framework**: Next.js 14 with App Router
+- **Styling**: Tailwind CSS
+- **Animations**: Framer Motion
+- **Image Processing**: Sharp
+- **Icons**: Heroicons
+- **File Handling**: React Dropzone
 
-## Learn More
+## 🔧 Installation
 
-To learn more about Next.js, take a look at the following resources:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/cybermorph.git
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. Install dependencies:
+   ```bash
+   cd cybermorph
+   npm install
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-## Deploy on Vercel
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🎨 Design Features
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Cyberpunk Grid**: Dynamic background with glowing grid lines
+- **Neon Effects**: Custom glowing borders and text
+- **Glitch Animations**: Text animations for cyber aesthetic
+- **Glass Morphism**: Translucent panels with blur effects
+- **Custom Scrollbar**: Themed scrollbar with gradient colors
+
+## 📦 Usage
+
+1. Drag and drop an image or click to select
+2. Choose your desired output format
+3. Click "Initialize Conversion"
+4. Download your transformed image
+
+## 🔄 Supported Formats
+
+- **WebP**: Next-gen format with superior compression
+- **PNG**: Lossless compression with alpha channel
+- **JPG**: Universal format with balanced compression
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Next.js team for the amazing framework
+- Tailwind CSS for the utility-first CSS framework
+- Framer Motion for the smooth animations
+- Sharp for the powerful image processing
+
+---
+
+Built with 💻 and neon dreams
