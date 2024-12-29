@@ -15,6 +15,7 @@ export interface QueueItem {
 interface QueueState {
   items: QueueItem[]
   isProcessing: boolean
+  error?: string
 }
 
 type QueueAction =
@@ -23,6 +24,10 @@ type QueueAction =
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'CLEAR_COMPLETED' }
   | { type: 'SET_PROCESSING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string }
+  | { type: 'CLEAR_ERROR' }
+
+const MAX_QUEUE_SIZE = 5
 
 const initialState: QueueState = {
   items: [],
@@ -31,18 +36,41 @@ const initialState: QueueState = {
 
 function queueReducer(state: QueueState, action: QueueAction): QueueState {
   switch (action.type) {
-    case 'ADD_ITEMS':
-      const newItems = action.payload.map((file) => ({
-        id: Math.random().toString(36).substr(2, 9),
-        file,
-        targetFormat: 'webp',
-        status: 'pending' as const,
-        progress: 0,
-      }))
+    case 'ADD_ITEMS': {
+      const pendingItems = state.items.filter(item => item.status === 'pending')
+      const availableSlots = MAX_QUEUE_SIZE - pendingItems.length
+      
+      if (availableSlots <= 0) {
+        return {
+          ...state,
+          error: `Queue limit reached (max ${MAX_QUEUE_SIZE} pending items). Please wait for current items to complete.`
+        }
+      }
+
+      const newItems = action.payload
+        .slice(0, availableSlots)
+        .map((file) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          file,
+          targetFormat: 'webp',
+          status: 'pending' as const,
+          progress: 0,
+        }))
+
+      if (action.payload.length > availableSlots) {
+        return {
+          ...state,
+          items: [...state.items, ...newItems],
+          error: `Only ${availableSlots} item${availableSlots === 1 ? '' : 's'} added. Queue limit reached.`
+        }
+      }
+
       return {
         ...state,
         items: [...state.items, ...newItems],
+        error: undefined
       }
+    }
 
     case 'UPDATE_ITEM':
       return {
@@ -58,6 +86,7 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
       return {
         ...state,
         items: state.items.filter((item) => item.id !== action.payload),
+        error: undefined
       }
 
     case 'CLEAR_COMPLETED':
@@ -66,12 +95,25 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
         items: state.items.filter(
           (item) => item.status !== 'completed' && item.status !== 'error'
         ),
+        error: undefined
       }
 
     case 'SET_PROCESSING':
       return {
         ...state,
         isProcessing: action.payload,
+      }
+
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.payload,
+      }
+
+    case 'CLEAR_ERROR':
+      return {
+        ...state,
+        error: undefined,
       }
 
     default:
@@ -85,6 +127,7 @@ const QueueContext = createContext<{
   updateItem: (update: Partial<QueueItem> & { id: string }) => void
   removeItem: (id: string) => void
   clearCompleted: () => void
+  clearError: () => void
   processQueue: () => Promise<void>
 } | null>(null)
 
@@ -105,6 +148,10 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
 
   const clearCompleted = useCallback(() => {
     dispatch({ type: 'CLEAR_COMPLETED' })
+  }, [])
+
+  const clearError = useCallback(() => {
+    dispatch({ type: 'CLEAR_ERROR' })
   }, [])
 
   const processQueue = useCallback(async () => {
@@ -164,6 +211,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         updateItem,
         removeItem,
         clearCompleted,
+        clearError,
         processQueue,
       }}
     >

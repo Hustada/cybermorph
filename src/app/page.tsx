@@ -37,44 +37,37 @@ export default function Home() {
       <main className="relative z-10 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <motion.div 
-            className="text-center mb-12"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
+          <div className="text-center mb-8">
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyber-cyan via-cyber-magenta to-cyber-cyan text-transparent bg-clip-text">
+              CyberMorph
+            </h1>
             <motion.div
-              className="inline-block"
-              animate={{ 
-                textShadow: [
-                  "0 0 7px #00fff9",
-                  "0 0 10px #00fff9",
-                  "0 0 21px #00fff9",
-                  "0 0 42px #00fff9",
-                  "0 0 82px #00fff9",
-                  "0 0 92px #00fff9",
-                  "0 0 102px #00fff9",
-                  "0 0 151px #00fff9",
-                ],
-              }}
-              transition={{ 
-                duration: 4,
-                repeat: Infinity,
-                repeatType: "reverse"
-              }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="relative mt-2"
             >
-              <h1 className="text-5xl md:text-7xl font-bold mb-4">
-                <span className="bg-gradient-to-r from-cyber-cyan to-cyber-magenta bg-clip-text text-transparent">
-                  CyberMorph
-                </span>
-              </h1>
+              <div className="absolute inset-0 bg-gradient-to-r from-cyber-cyan/20 via-cyber-magenta/20 to-cyber-cyan/20 blur-xl" />
+              <p className="text-sm md:text-base font-mono text-gray-400 relative">
+                Neural Image Transformation Protocol
+              </p>
+              <motion.p 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+                className="text-lg md:text-xl font-cyberpunk tracking-wide text-cyber-cyan mt-1 relative"
+              >
+                The Most Advanced Image Converter in the Galaxy
+                <motion.span
+                  className="absolute -right-4 top-0 text-cyber-magenta"
+                  animate={{ opacity: [1, 0.5, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  _
+                </motion.span>
+              </motion.p>
             </motion.div>
-            <p className="text-gray-400 text-lg mb-2">Neural Image Transformation Protocol</p>
-            <div className="flex items-center justify-center gap-2 text-sm text-cyber-cyan">
-              <CpuChipIcon className="w-4 h-4" />
-              <span>v1.0.0</span>
-            </div>
-          </motion.div>
+          </div>
           
           {/* Upload Zone */}
           <motion.div 
