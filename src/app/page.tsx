@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpTrayIcon, XMarkIcon, ArrowPathIcon, BeakerIcon, CpuChipIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, BeakerIcon, CpuChipIcon } from '@heroicons/react/24/outline'
+import { useQueue } from '@/context/QueueContext'
+import ConversionQueue from '@/components/ConversionQueue'
 
 const formatDescriptions = {
   webp: 'Next-gen format with superior compression and quality',
@@ -12,93 +14,19 @@ const formatDescriptions = {
 }
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null)
-  const [converting, setConverting] = useState(false)
   const [targetFormat, setTargetFormat] = useState('webp')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [conversionProgress, setConversionProgress] = useState(0)
+  const { addItems } = useQueue()
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
     },
-    maxFiles: 1,
     onDrop: acceptedFiles => {
-      if (acceptedFiles[0]) {
-        setFile(acceptedFiles[0])
-        setPreviewUrl(URL.createObjectURL(acceptedFiles[0]))
+      if (acceptedFiles.length > 0) {
+        addItems(acceptedFiles)
       }
     }
   })
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-      }
-    }
-  }, [previewUrl])
-
-  const clearFile = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl)
-    }
-    setFile(null)
-    setPreviewUrl(null)
-    setConversionProgress(0)
-  }
-
-  const simulateProgress = () => {
-    setConversionProgress(0)
-    const interval = setInterval(() => {
-      setConversionProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          return 100
-        }
-        return prev + 5
-      })
-    }, 100)
-    return interval
-  }
-
-  const handleConvert = async () => {
-    if (!file) return
-    setConverting(true)
-    const progressInterval = simulateProgress()
-    
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('format', targetFormat)
-    
-    try {
-      const response = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData
-      })
-      
-      if (!response.ok) throw new Error('Conversion failed')
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `cybermorph_${file.name.split('.')[0]}.${targetFormat}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Error converting image:', error)
-    } finally {
-      clearInterval(progressInterval)
-      setConversionProgress(100)
-      setTimeout(() => {
-        setConverting(false)
-        setConversionProgress(0)
-      }, 500)
-    }
-  }
 
   return (
     <main className="min-h-screen p-4 md:p-8 bg-gradient-to-b from-cyber-black to-cyber-charcoal">
@@ -173,121 +101,43 @@ export default function Home() {
                   : "DRAG & DROP PROTOCOL"}
               </p>
               <p className="text-sm text-gray-400">
-                Or activate manual selection
+                Upload multiple files for batch processing
               </p>
             </motion.div>
           </div>
         </motion.div>
 
-        {/* File Preview and Controls */}
-        <AnimatePresence mode="wait">
-          {file && (
-            <motion.div 
-              className="bg-cyber-charcoal/50 backdrop-blur-sm rounded-lg p-8 border border-cyber-magenta/20"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="flex flex-col md:flex-row gap-8">
-                {/* Preview */}
-                <div className="flex-1">
-                  <div className="relative group">
-                    {previewUrl && (
-                      <img 
-                        src={previewUrl} 
-                        alt="Preview" 
-                        className="w-full h-48 object-cover rounded-lg border border-gray-700"
-                      />
-                    )}
-                    <button
-                      onClick={clearFile}
-                      className="absolute top-2 right-2 p-1 rounded-full bg-cyber-black/80 text-cyber-cyan 
-                        opacity-0 group-hover:opacity-100 transition-opacity hover:text-cyber-magenta"
-                    >
-                      <XMarkIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <div className="mt-4 text-sm text-gray-400">
-                    <p>Filename: {file.name}</p>
-                    <p>Size: {(file.size / 1024).toFixed(2)} KB</p>
-                  </div>
-                </div>
+        {/* Format Selection */}
+        <motion.div 
+          className="bg-cyber-charcoal/50 backdrop-blur-sm rounded-lg p-8 border border-cyber-magenta/20"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <h3 className="text-lg mb-4 flex items-center gap-2">
+            <BeakerIcon className="w-5 h-5 text-cyber-cyan" />
+            <span>Default Transformation Format</span>
+          </h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Target Format</label>
+              <select
+                value={targetFormat}
+                onChange={(e) => setTargetFormat(e.target.value)}
+                className="w-full bg-cyber-black border border-gray-600 rounded px-4 py-2 
+                  focus:border-cyber-cyan focus:outline-none focus:shadow-neon-cyan"
+              >
+                {Object.entries(formatDescriptions).map(([format, desc]) => (
+                  <option key={format} value={format}>{format.toUpperCase()} - {desc}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </motion.div>
 
-                {/* Controls */}
-                <div className="flex-1">
-                  <h3 className="text-lg mb-4 flex items-center gap-2">
-                    <BeakerIcon className="w-5 h-5 text-cyber-cyan" />
-                    <span>Transformation Parameters</span>
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Target Format</label>
-                      <select
-                        value={targetFormat}
-                        onChange={(e) => setTargetFormat(e.target.value)}
-                        className="w-full bg-cyber-black border border-gray-600 rounded px-4 py-2 
-                          focus:border-cyber-cyan focus:outline-none focus:shadow-neon-cyan"
-                      >
-                        {Object.entries(formatDescriptions).map(([format, desc]) => (
-                          <option key={format} value={format}>{format.toUpperCase()} - {desc}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Progress Bar */}
-                    {converting && (
-                      <div className="mt-4">
-                        <div className="h-2 bg-cyber-black rounded-full overflow-hidden">
-                          <motion.div
-                            className="h-full bg-gradient-to-r from-cyber-cyan to-cyber-magenta"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${conversionProgress}%` }}
-                            transition={{ duration: 0.3 }}
-                          />
-                        </div>
-                        <p className="text-center text-sm mt-2 text-cyber-cyan">
-                          {conversionProgress < 100 
-                            ? 'EXECUTING TRANSFORMATION...' 
-                            : 'TRANSFORMATION COMPLETE'}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-4">
-                      <button
-                        onClick={handleConvert}
-                        disabled={converting}
-                        className={`flex-1 px-6 py-3 rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
-                          hover:shadow-neon-cyan transition-all ${converting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <span className="flex items-center justify-center gap-2">
-                          {converting ? (
-                            <>
-                              <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                              Processing
-                            </>
-                          ) : (
-                            'Initialize Conversion'
-                          )}
-                        </span>
-                      </button>
-                      
-                      <button
-                        onClick={clearFile}
-                        className="px-6 py-3 rounded border border-gray-600 hover:border-cyber-magenta 
-                          hover:text-cyber-magenta transition-all"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Queue Component */}
+        <ConversionQueue />
       </div>
     </main>
   )

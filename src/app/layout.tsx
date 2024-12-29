@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Exo_2 } from 'next/font/google'
+import { QueueProvider } from '@/context/QueueContext'
 import './globals.css'
 
 const exo2 = Exo_2({ subsets: ['latin'] })
@@ -20,7 +21,9 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className={`${exo2.className} bg-cyber-black text-cyber-white min-h-screen`}>
-        {children}
+        <QueueProvider>
+          {children}
+        </QueueProvider>
       </body>
     </html>
   )
