@@ -6,7 +6,9 @@ import { XMarkIcon, ArrowDownTrayIcon, ExclamationCircleIcon, CheckCircleIcon } 
 import { useQueue, QueueItem } from '@/context/QueueContext'
 import { useSound } from '@/context/SoundContext'
 import NeuralProcessing from './NeuralProcessing'
-import Image from 'next/image'
+
+// Add ESLint disable comment for the img element warning since we're using data URLs
+/* eslint-disable @next/next/no-img-element */
 
 export default function ConversionQueue() {
   const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
