@@ -11,7 +11,7 @@ import NeuralProcessing from './NeuralProcessing'
 /* eslint-disable @next/next/no-img-element */
 
 export default function ConversionQueue() {
-  const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
+  const { state, updateItem, removeItem, clearCompleted, clearError, retryItem } = useQueue()
   const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -64,69 +64,7 @@ export default function ConversionQueue() {
 
     for (const item of pendingItems) {
       try {
-        updateItem({ id: item.id, status: 'processing', progress: 0 })
-
-        console.log('Processing file:', {
-          size: item.file?.size,
-          isFile: item.file instanceof File
-        })
-
-        let fileData: File | Blob
-        if (item.file instanceof File || item.file instanceof Blob) {
-          fileData = item.file
-        } else {
-          throw new Error('Invalid file object')
-        }
-
-        const formData = new FormData()
-        formData.append('file', fileData)
-        formData.append('format', item.targetFormat)
-
-        console.log('Converting file:', {
-          format: item.targetFormat,
-          size: fileData.size,
-          type: fileData.type
-        })
-
-        const response = await fetch('/api/convert', {
-          method: 'POST',
-          body: formData,
-        })
-
-        if (!response.ok) {
-          let errorMessage = 'Failed to convert file'
-          
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.error || errorMessage
-            if (errorData.details) {
-              console.error('Conversion details:', errorData.details)
-            }
-          } catch {
-            // If response is not JSON, check status code
-            if (response.status === 504) {
-              errorMessage = 'Conversion timed out. Try with a smaller file or different format.'
-            } else if (response.status === 413) {
-              errorMessage = 'File is too large. Maximum size is 10MB.'
-            }
-          }
-          
-          throw new Error(errorMessage)
-        }
-
-        // Get the blob from the response
-        const blob = await response.blob()
-        console.log('Conversion successful:', {
-          size: blob.size,
-          type: blob.type
-        })
-
-        updateItem({
-          id: item.id,
-          status: 'completed',
-          progress: 100,
-          result: blob
-        })
+        await handleConversion(item)
       } catch (error) {
         console.error('Conversion error:', error)
         updateItem({
@@ -137,6 +75,96 @@ export default function ConversionQueue() {
       }
     }
   }, [state.items, updateItem])
+
+  const handleConversion = async (item: QueueItem) => {
+    try {
+      updateItem({
+        id: item.id,
+        status: 'processing',
+        progress: 0
+      })
+
+      let fileData: File | Blob
+      if (item.file instanceof File || item.file instanceof Blob) {
+        fileData = item.file
+      } else {
+        throw new Error('Invalid file object')
+      }
+
+      const formData = new FormData()
+      formData.append('file', fileData)
+      formData.append('format', item.targetFormat)
+      formData.append('quality', (item.quality || 80).toString())
+
+      console.log('Converting file:', {
+        format: item.targetFormat,
+        size: fileData.size,
+        type: fileData.type,
+        quality: item.quality
+      })
+
+      let response = await fetch('/api/convert', {
+        method: 'POST',
+        body: formData,
+      })
+
+      // If file is too large, try with lower quality
+      if (response.status === 413) {
+        const errorData = await response.json()
+        
+        if (errorData.suggestion && window.confirm('Image is large. Would you like to try converting with lower quality?')) {
+          // Retry with lower quality
+          retryItem(item.id, 60)
+          return
+        } else {
+          throw new Error(errorData.suggestion || 'File is too large')
+        }
+      }
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to convert file'
+        
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+          if (errorData.details) {
+            console.error('Conversion details:', errorData.details)
+          }
+          if (errorData.suggestion) {
+            errorMessage += '. ' + errorData.suggestion
+          }
+        } catch {
+          if (response.status === 504) {
+            errorMessage = 'Conversion timed out. Try using WebP format for better performance.'
+          }
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob()
+      console.log('Conversion successful:', {
+        size: blob.size,
+        type: blob.type,
+        quality: item.quality
+      })
+
+      updateItem({
+        id: item.id,
+        status: 'completed',
+        progress: 100,
+        result: blob
+      })
+    } catch (error) {
+      console.error('Conversion error:', error)
+      updateItem({
+        id: item.id,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
 
   useEffect(() => {
     state.items.forEach(async (item) => {
