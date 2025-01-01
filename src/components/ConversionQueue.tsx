@@ -6,21 +6,29 @@ import { XMarkIcon, ArrowDownTrayIcon, ExclamationCircleIcon, CheckCircleIcon } 
 import { useQueue, QueueItem } from '@/context/QueueContext'
 import { useSound } from '@/context/SoundContext'
 import NeuralProcessing from './NeuralProcessing'
+import Image from 'next/image'
 
 export default function ConversionQueue() {
   const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
   const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [previews, setPreviews] = useState<Record<string, string>>({})
 
-  const createPreviewUrl = useCallback((file: File | Blob) => {
-    return URL.createObjectURL(file)
+  const createPreviewUrl = useCallback(async (file: File | Blob): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        resolve(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    })
   }, [])
 
   const handleDownload = (item: QueueItem) => {
     if (item.result) {
       playDownloadSound()
-      const url = createPreviewUrl(item.result)
+      const url = URL.createObjectURL(item.result)
       const a = document.createElement('a')
       a.href = url
       a.download = `cybermorph_${item.file instanceof File ? item.file.name.split('.')[0] : 'image'}.${item.targetFormat}`
@@ -57,16 +65,15 @@ export default function ConversionQueue() {
         updateItem({ id: item.id, status: 'processing', progress: 0 })
 
         console.log('Processing file:', {
-          type: item.file?.constructor?.name,
-          name: item.file?.name,
-          size: item.file?.size
+          size: item.file?.size,
+          isFile: item.file instanceof File
         })
 
         let fileData: File | Blob
         if (item.file instanceof File || item.file instanceof Blob) {
           fileData = item.file
         } else {
-          throw new Error('Unsupported file type')
+          throw new Error('Invalid file object')
         }
 
         const formData = new FormData()
@@ -100,6 +107,27 @@ export default function ConversionQueue() {
       }
     }
   }, [state.items, updateItem])
+
+  useEffect(() => {
+    state.items.forEach(async (item) => {
+      if (item.file && !previews[item.id]) {
+        const previewUrl = await createPreviewUrl(item.file)
+        setPreviews(prev => ({ ...prev, [item.id]: previewUrl }))
+      }
+    })
+  }, [state.items, previews, createPreviewUrl])
+
+  useEffect(() => {
+    Object.keys(previews).forEach(id => {
+      if (!state.items.find(item => item.id === id)) {
+        setPreviews(prev => {
+          const newPreviews = { ...prev }
+          delete newPreviews[id]
+          return newPreviews
+        })
+      }
+    })
+  }, [state.items, previews])
 
   useEffect(() => {
     return () => {
@@ -199,15 +227,11 @@ export default function ConversionQueue() {
                 >
                   {/* Preview Image */}
                   <div className="w-12 h-12 rounded overflow-hidden bg-cyber-black/50 border border-cyber-cyan/20 flex items-center justify-center">
-                    {item.file && (
+                    {previews[item.id] && (
                       <img
-                        src={createPreviewUrl(item.file)}
+                        src={previews[item.id]}
                         alt="Preview"
                         className="w-full h-full object-cover"
-                        onLoad={(e) => {
-                          const img = e.target as HTMLImageElement
-                          URL.revokeObjectURL(img.src)
-                        }}
                       />
                     )}
                   </div>
