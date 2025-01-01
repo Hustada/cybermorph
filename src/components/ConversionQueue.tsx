@@ -82,22 +82,34 @@ export default function ConversionQueue() {
         formData.append('file', fileData)
         formData.append('format', item.targetFormat)
 
+        console.log('Converting file:', {
+          format: item.targetFormat,
+          size: fileData.size,
+          type: fileData.type
+        })
+
         const response = await fetch('/api/convert', {
           method: 'POST',
           body: formData,
         })
 
         if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || 'Conversion failed')
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(errorData.error || 'Failed to convert file')
         }
 
-        const resultBlob = await response.blob()
+        // Get the blob from the response
+        const blob = await response.blob()
+        console.log('Conversion successful:', {
+          size: blob.size,
+          type: blob.type
+        })
+
         updateItem({
           id: item.id,
           status: 'completed',
           progress: 100,
-          result: resultBlob,
+          result: blob
         })
       } catch (error) {
         console.error('Conversion error:', error)

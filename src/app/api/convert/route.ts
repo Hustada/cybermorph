@@ -7,9 +7,9 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('file')
-    const format = formData.get('format')
+    const format = formData.get('format')?.toString().toLowerCase()
 
-    if (!file || !format || typeof format !== 'string') {
+    if (!file || !format) {
       return NextResponse.json(
         { error: 'File and format are required' },
         { status: 400 }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
           break
         default:
           return NextResponse.json(
-            { error: 'Unsupported format' },
+            { error: `Unsupported format: ${format}` },
             { status: 400 }
           )
       }
@@ -67,9 +67,16 @@ export async function POST(request: NextRequest) {
       const convertedBuffer = await converter.toBuffer()
       console.log('API: Conversion successful, size:', convertedBuffer.length)
       
+      // Set correct content type based on format
+      const contentType = format === 'jpg' || format === 'jpeg' 
+        ? 'image/jpeg'
+        : `image/${format}`
+
+      // Return the converted image as a blob with proper content type
       return new NextResponse(convertedBuffer, {
         headers: {
-          'Content-Type': `image/${format}`,
+          'Content-Type': contentType,
+          'Content-Length': convertedBuffer.length.toString(),
           'Cache-Control': 'public, max-age=31536000',
         },
       })
