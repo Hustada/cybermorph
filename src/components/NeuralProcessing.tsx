@@ -28,7 +28,7 @@ export default function NeuralProcessing({ isProcessing, onComplete }: Props) {
   const [showComponent, setShowComponent] = React.useState(false)
 
   React.useEffect(() => {
-    const timeouts: readonly NodeJS.Timeout[] = []
+    const timeouts: NodeJS.Timeout[] = []
 
     if (isProcessing) {
       setShowComponent(true)
