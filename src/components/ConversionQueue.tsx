@@ -119,28 +119,6 @@ export default function ConversionQueue() {
     })
   }, [state.items, previews, createPreviewUrl])
 
-  useEffect(() => {
-    Object.keys(previews).forEach(id => {
-      if (!state.items.find(item => item.id === id)) {
-        setPreviews(prev => {
-          const newPreviews = { ...prev }
-          delete newPreviews[id]
-          return newPreviews
-        })
-      }
-    })
-  }, [state.items, previews])
-
-  useEffect(() => {
-    return () => {
-      state.items.forEach(item => {
-        if (item.previewUrl) {
-          URL.revokeObjectURL(item.previewUrl)
-        }
-      })
-    }
-  }, [state.items])
-
   if (state.items.length === 0 && !state.error) return null
 
   return (
