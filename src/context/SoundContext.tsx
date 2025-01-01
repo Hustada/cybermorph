@@ -1,122 +1,70 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
+import React, { createContext, useContext, useCallback, useRef } from 'react'
 
 interface SoundContextType {
   playIntroSequence: () => Promise<void>
   playProcessingSound: () => void
   stopProcessingSounds: () => void
+  playDownloadSound: () => void
+  playSubmitSound: () => void
 }
 
-const SoundContext = createContext<SoundContextType | undefined>(undefined)
+const SoundContext = createContext<SoundContextType | null>(null)
 
 export function SoundProvider({ children }: { children: React.ReactNode }) {
-  const [sounds, setSounds] = useState<{ [key: string]: HTMLAudioElement }>({})
-  const processingIntervalsRef = useRef<NodeJS.Timeout[]>([])
+  const audioCache = useRef<{ [key: string]: HTMLAudioElement }>({})
+  const processingInterval = useRef<NodeJS.Timeout>()
 
-  useEffect(() => {
-    // Pre-load all sounds
-    const soundFiles = {
-      intro: '/sounds/synthintro4.wav',
-      processing1: '/sounds/synth.wav',
-      processing3: '/sounds/blipSelect.wav',
-      processing4: '/sounds/blipSelect2.wav',
-      processing5: '/sounds/blipSelect3.wav',
-      processing6: '/sounds/click.wav',
-      processing7: '/sounds/tone.wav',
+  const playSound = useCallback(async (soundKey: string, volume: number = 1) => {
+    if (!audioCache.current[soundKey]) {
+      audioCache.current[soundKey] = new Audio(`/sounds/${soundKey}.wav`)
+    }
+    const audio = audioCache.current[soundKey]
+    audio.volume = volume
+    audio.currentTime = 0
+    await audio.play()
+  }, [])
+
+  const playIntroSequence = useCallback(async () => {
+    await playSound('cyberrobot', 0.5)
+  }, [playSound])
+
+  const playProcessingSound = useCallback(() => {
+    let index = 0
+    const sounds = ['tone', 'blipSelect', 'blipSelect2', 'blipSelect3']
+    const playNext = () => {
+      const volume = index === 0 ? 0.2 : 0.3
+      playSound(sounds[index], volume)
+      index = (index + 1) % sounds.length
     }
 
-    const loadedSounds: { [key: string]: HTMLAudioElement } = {}
-    
-    Object.entries(soundFiles).forEach(([key, path]) => {
-      const audio = new Audio(path)
-      audio.preload = 'auto'
-      // Set lower volume for processing sounds
-      if (key.startsWith('processing')) {
-        audio.volume = 0.4
-      }
-      loadedSounds[key] = audio
-    })
+    playNext()
+    processingInterval.current = setInterval(playNext, 400)
+  }, [playSound])
 
-    setSounds(loadedSounds)
-
-    // Cleanup on unmount
-    return () => {
-      Object.values(loadedSounds).forEach(audio => {
-        audio.pause()
-        audio.src = ''
-      })
-      stopProcessingSounds()
+  const stopProcessingSounds = useCallback(() => {
+    if (processingInterval.current) {
+      clearInterval(processingInterval.current)
     }
   }, [])
 
-  const playSound = async (soundKey: string, volume?: number) => {
-    if (sounds[soundKey]) {
-      const audio = sounds[soundKey]
-      audio.currentTime = 0
-      if (volume !== undefined) {
-        audio.volume = volume
-      }
-      try {
-        await audio.play()
-      } catch (error) {
-        console.error('Error playing sound:', error)
-      }
-    }
-  }
+  const playDownloadSound = useCallback(() => {
+    playSound('clickdownload', 0.4)
+  }, [playSound])
 
-  // Play intro sound
-  const playIntroSequence = async () => {
-    await playSound('intro', 0.7)
-  }
-
-  // Create a more intense processing sound experience
-  const playProcessingSound = () => {
-    const processingSounds = [
-      'processing1', 'processing3', 
-      'processing4', 'processing5', 'processing6', 'processing7'
-    ]
-
-    // Clear any existing intervals
-    stopProcessingSounds()
-
-    // Create multiple intervals with different timings for a more dynamic sound
-    const intervals = [
-      // Fast beeps
-      setInterval(() => {
-        const randomSound = processingSounds[Math.floor(Math.random() * 3)]
-        playSound(randomSound, 0.3)
-      }, 300),
-
-      // Medium speed processing sounds
-      setInterval(() => {
-        const randomSound = processingSounds[Math.floor(Math.random() * processingSounds.length)]
-        playSound(randomSound, 0.4)
-      }, 600),
-
-      // Occasional longer sounds
-      setInterval(() => {
-        const randomSound = processingSounds[3 + Math.floor(Math.random() * 3)]
-        playSound(randomSound, 0.35)
-      }, 900)
-    ]
-
-    processingIntervalsRef.current = intervals
-  }
-
-  const stopProcessingSounds = () => {
-    processingIntervalsRef.current.forEach(interval => clearInterval(interval))
-    processingIntervalsRef.current = []
-  }
+  const playSubmitSound = useCallback(() => {
+    playSound('synthintro4', 0.4)
+  }, [playSound])
 
   return (
-    <SoundContext.Provider 
-      value={{
-        playIntroSequence,
-        playProcessingSound,
-        stopProcessingSounds
-      }}
-    >
+    <SoundContext.Provider value={{
+      playIntroSequence,
+      playProcessingSound,
+      stopProcessingSounds,
+      playDownloadSound,
+      playSubmitSound
+    }}>
       {children}
     </SoundContext.Provider>
   )
@@ -124,7 +72,7 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
 
 export function useSound() {
   const context = useContext(SoundContext)
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useSound must be used within a SoundProvider')
   }
   return context
