@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, useCallback } from 'react'
+import React, { createContext, useContext, useReducer, useCallback, useState } from 'react'
 
 export interface QueueItem {
   id: string
@@ -10,6 +10,7 @@ export interface QueueItem {
   progress: number
   result?: Blob
   error?: string
+  quality?: number
 }
 
 interface QueueState {
@@ -19,13 +20,14 @@ interface QueueState {
 }
 
 type QueueAction =
-  | { type: 'ADD_ITEMS'; payload: { file: File; targetFormat: string }[] }
+  | { type: 'ADD_ITEMS'; payload: { file: File; targetFormat: string; quality?: number }[] }
   | { type: 'UPDATE_ITEM'; payload: Partial<QueueItem> & { id: string } }
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'CLEAR_COMPLETED' }
   | { type: 'SET_PROCESSING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
+  | { type: 'RETRY_ITEM'; payload: { id: string; quality?: number } }
 
 const MAX_QUEUE_SIZE = 5
 
@@ -49,12 +51,13 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 
       const newItems = action.payload
         .slice(0, availableSlots)
-        .map(({ file, targetFormat }) => ({
+        .map(({ file, targetFormat, quality }) => ({
           id: Math.random().toString(36).substr(2, 9),
           file,
           targetFormat,
           status: 'pending' as const,
           progress: 0,
+          quality: quality || 80
         }))
 
       if (action.payload.length > availableSlots) {
@@ -116,6 +119,23 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
         error: undefined,
       }
 
+    case 'RETRY_ITEM':
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === action.payload.id
+            ? {
+                ...item,
+                status: 'pending',
+                progress: 0,
+                error: undefined,
+                result: undefined,
+                quality: action.payload.quality || item.quality || 80
+              }
+            : item
+        ),
+      }
+
     default:
       return state
   }
@@ -123,18 +143,19 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 
 const QueueContext = createContext<{
   state: QueueState
-  addItems: (files: { file: File; targetFormat: string }[]) => void
+  addItems: (files: { file: File; targetFormat: string; quality?: number }[]) => void
   updateItem: (update: Partial<QueueItem> & { id: string }) => void
   removeItem: (id: string) => void
   clearCompleted: () => void
   clearError: () => void
   processQueue: () => Promise<void>
+  retryItem: (id: string, quality?: number) => void
 } | null>(null)
 
 export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(queueReducer, initialState)
 
-  const addItems = useCallback((files: { file: File; targetFormat: string }[]) => {
+  const addItems = useCallback((files: { file: File; targetFormat: string; quality?: number }[]) => {
     dispatch({ type: 'ADD_ITEMS', payload: files })
   }, [])
 
@@ -170,6 +191,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         const formData = new FormData()
         formData.append('file', item.file)
         formData.append('format', item.targetFormat)
+        formData.append('quality', item.quality.toString())
 
         const response = await fetch('/api/convert', {
           method: 'POST',
@@ -203,6 +225,10 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_PROCESSING', payload: false })
   }, [state.isProcessing, state.items])
 
+  const retryItem = useCallback((id: string, quality?: number) => {
+    dispatch({ type: 'RETRY_ITEM', payload: { id, quality } })
+  }, [])
+
   return (
     <QueueContext.Provider
       value={{
@@ -213,6 +239,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         clearCompleted,
         clearError,
         processQueue,
+        retryItem,
       }}
     >
       {children}
