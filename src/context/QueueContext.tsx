@@ -19,7 +19,7 @@ interface QueueState {
 }
 
 type QueueAction =
-  | { type: 'ADD_ITEMS'; payload: File[] }
+  | { type: 'ADD_ITEMS'; payload: { file: File; targetFormat: string }[] }
   | { type: 'UPDATE_ITEM'; payload: Partial<QueueItem> & { id: string } }
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'CLEAR_COMPLETED' }
@@ -49,10 +49,10 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 
       const newItems = action.payload
         .slice(0, availableSlots)
-        .map((file) => ({
+        .map(({ file, targetFormat }) => ({
           id: Math.random().toString(36).substr(2, 9),
           file,
-          targetFormat: 'webp',
+          targetFormat,
           status: 'pending' as const,
           progress: 0,
         }))
@@ -123,7 +123,7 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 
 const QueueContext = createContext<{
   state: QueueState
-  addItems: (files: File[]) => void
+  addItems: (files: { file: File; targetFormat: string }[]) => void
   updateItem: (update: Partial<QueueItem> & { id: string }) => void
   removeItem: (id: string) => void
   clearCompleted: () => void
@@ -134,7 +134,7 @@ const QueueContext = createContext<{
 export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(queueReducer, initialState)
 
-  const addItems = useCallback((files: File[]) => {
+  const addItems = useCallback((files: { file: File; targetFormat: string }[]) => {
     dispatch({ type: 'ADD_ITEMS', payload: files })
   }, [])
 

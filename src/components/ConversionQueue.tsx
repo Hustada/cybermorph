@@ -7,8 +7,9 @@ import { useQueue, QueueItem } from '@/context/QueueContext'
 import NeuralProcessing from './NeuralProcessing'
 
 export default function ConversionQueue() {
-  const { state, removeItem, clearCompleted, clearError, updateItem } = useQueue()
+  const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const handleDownload = (item: QueueItem) => {
     if (item.result) {
@@ -33,19 +34,42 @@ export default function ConversionQueue() {
   const completedCount = state.items.filter(item => item.status === 'completed').length
 
   const processQueue = useCallback(async () => {
-    if (state.isProcessing) return
+    if (isProcessing) return
+    setIsProcessing(true)
     setShowNeuralProcessing(true)
-  }, [state.isProcessing])
+  }, [isProcessing])
 
   const handleNeuralComplete = useCallback(async () => {
+    setIsProcessing(false)  // Reset processing state
     const pendingItems = state.items.filter((item) => item.status === 'pending')
 
     for (const item of pendingItems) {
       try {
         updateItem({ id: item.id, status: 'processing', progress: 0 })
 
+        console.log('Processing file:', {
+          type: item.file?.constructor?.name,
+          name: item.file?.name,
+          size: item.file?.size
+        })
+
+        // Handle different file types
+        let fileData: File | Blob
+        if (item.file instanceof File) {
+          fileData = item.file
+        } else if (item.file instanceof Blob) {
+          fileData = new File([item.file], 'image', { type: item.file.type })
+        } else if (typeof item.file === 'string') {
+          // Handle base64 or data URL
+          const response = await fetch(item.file)
+          const blob = await response.blob()
+          fileData = new File([blob], 'image', { type: blob.type })
+        } else {
+          throw new Error('Unsupported file format')
+        }
+
         const formData = new FormData()
-        formData.append('file', item.file)
+        formData.append('file', fileData)
         formData.append('format', item.targetFormat)
 
         const response = await fetch('/api/convert', {
@@ -53,16 +77,20 @@ export default function ConversionQueue() {
           body: formData,
         })
 
-        if (!response.ok) throw new Error('Conversion failed')
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Conversion failed')
+        }
 
-        const blob = await response.blob()
+        const resultBlob = await response.blob()
         updateItem({
           id: item.id,
           status: 'completed',
           progress: 100,
-          result: blob,
+          result: resultBlob,
         })
       } catch (error) {
+        console.error('Conversion error:', error)
         updateItem({
           id: item.id,
           status: 'error',
@@ -129,10 +157,10 @@ export default function ConversionQueue() {
               )}
               <button
                 onClick={() => processQueue()}
-                disabled={state.isProcessing}
+                disabled={isProcessing}
                 className={`px-4 py-2 rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
                   hover:shadow-neon-cyan transition-all ${
-                    state.isProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                    isProcessing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
               >
                 Process Queue

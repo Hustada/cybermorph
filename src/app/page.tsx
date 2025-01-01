@@ -2,31 +2,29 @@
 
 import { useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpTrayIcon, BeakerIcon } from '@heroicons/react/24/outline'
 import { useQueue } from '@/context/QueueContext'
 import ConversionQueue from '@/components/ConversionQueue'
 import CyberBackground from '@/components/CyberBackground'
 import Footer from '@/components/Footer'
-
-const formatDescriptions = {
-  webp: 'Next-gen format with superior compression and quality',
-  png: 'Lossless compression with alpha channel support',
-  jpg: 'Universal format with balanced compression',
-}
+import Welcome from '@/components/Welcome'
 
 export default function Home() {
   const [targetFormat, setTargetFormat] = useState('webp')
   const { addItems } = useQueue()
+  const [showWelcome, setShowWelcome] = useState(true)
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
     },
-    onDrop: acceptedFiles => {
-      if (acceptedFiles.length > 0) {
-        addItems(acceptedFiles)
-      }
+    onDrop: (acceptedFiles) => {
+      const items = acceptedFiles.map(file => ({
+        file,
+        targetFormat
+      }))
+      addItems(items)
     }
   })
 
@@ -34,6 +32,12 @@ export default function Home() {
     <div className="min-h-screen relative">
       <CyberBackground />
       
+      <AnimatePresence>
+        {showWelcome && (
+          <Welcome onStart={() => setShowWelcome(false)} />
+        )}
+      </AnimatePresence>
+
       <main className="relative z-10 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -126,7 +130,11 @@ export default function Home() {
                   className="w-full bg-cyber-black/50 border border-gray-600 rounded px-4 py-2 
                     focus:border-cyber-cyan focus:outline-none focus:shadow-neon-cyan glow-hover"
                 >
-                  {Object.entries(formatDescriptions).map(([format, desc]) => (
+                  {Object.entries({
+                    webp: 'Next-gen format with superior compression and quality',
+                    png: 'Lossless compression with alpha channel support',
+                    jpg: 'Universal format with balanced compression',
+                  }).map(([format, desc]) => (
                     <option key={format} value={format}>{format.toUpperCase()} - {desc}</option>
                   ))}
                 </select>
