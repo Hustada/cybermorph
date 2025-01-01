@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, motion, useScroll, useTransform, useSpring, useMotionValue, animate } from 'framer-motion'
+import { useEffect } from 'react'
+import { motion, useScroll, useTransform, useSpring, useMotionValue, animate } from 'framer-motion'
 
 export default function CyberBackground() {
   const mouseX = useMotionValue(0)
