@@ -51,31 +51,6 @@ export default function ConversionQueue() {
 
   const completedCount = state.items.filter(item => item.status === 'completed').length
 
-  const processQueue = useCallback(async () => {
-    if (isProcessing) return
-    playSubmitSound()
-    setIsProcessing(true)
-    setShowNeuralProcessing(true)
-  }, [isProcessing, playSubmitSound])
-
-  const handleNeuralComplete = useCallback(async () => {
-    setIsProcessing(false)
-    const pendingItems = state.items.filter((item) => item.status === 'pending')
-
-    for (const item of pendingItems) {
-      try {
-        await handleConversion(item)
-      } catch (error) {
-        console.error('Conversion error:', error)
-        updateItem({
-          id: item.id,
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
-      }
-    }
-  }, [state.items, updateItem])
-
   const handleConversion = async (item: QueueItem) => {
     try {
       updateItem({
@@ -103,7 +78,7 @@ export default function ConversionQueue() {
         quality: item.quality
       })
 
-      let response = await fetch('/api/convert', {
+      const response = await fetch('/api/convert', {
         method: 'POST',
         body: formData,
       })
@@ -165,6 +140,50 @@ export default function ConversionQueue() {
       })
     }
   }
+
+  const processQueue = useCallback(async () => {
+    if (isProcessing) return
+    playSubmitSound()
+    setIsProcessing(true)
+
+    const pendingItems = state.items.filter((item) => item.status === 'pending')
+    if (pendingItems.length === 0) {
+      setIsProcessing(false)
+      return
+    }
+
+    for (const item of pendingItems) {
+      try {
+        await handleConversion(item)
+      } catch (error) {
+        console.error('Conversion error:', error)
+        updateItem({
+          id: item.id,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    }
+    setIsProcessing(false)
+  }, [state.items, updateItem, isProcessing, handleConversion])
+
+  const handleNeuralComplete = useCallback(async () => {
+    setIsProcessing(false)
+    const pendingItems = state.items.filter((item) => item.status === 'pending')
+
+    for (const item of pendingItems) {
+      try {
+        await handleConversion(item)
+      } catch (error) {
+        console.error('Conversion error:', error)
+        updateItem({
+          id: item.id,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    }
+  }, [state.items, updateItem])
 
   useEffect(() => {
     state.items.forEach(async (item) => {

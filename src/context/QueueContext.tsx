@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, useCallback, useState } from 'react'
+import React, { createContext, useContext, useReducer, useCallback } from 'react'
 
 export interface QueueItem {
   id: string
