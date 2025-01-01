@@ -102,7 +102,7 @@ export default function ConversionQueue() {
             if (errorData.details) {
               console.error('Conversion details:', errorData.details)
             }
-          } catch (e) {
+          } catch {
             // If response is not JSON, check status code
             if (response.status === 504) {
               errorMessage = 'Conversion timed out. Try with a smaller file or different format.'
