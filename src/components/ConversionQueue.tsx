@@ -60,17 +60,10 @@ export default function ConversionQueue() {
 
         // Handle different file types
         let fileData: File | Blob
-        if (item.file instanceof File) {
+        if (item.file instanceof File || item.file instanceof Blob) {
           fileData = item.file
-        } else if (item.file instanceof Blob) {
-          fileData = new File([item.file], 'image', { type: item.file.type })
-        } else if (typeof item.file === 'string') {
-          // Handle base64 or data URL
-          const response = await fetch(item.file)
-          const blob = await response.blob()
-          fileData = new File([blob], 'image', { type: blob.type })
         } else {
-          throw new Error('Unsupported file format')
+          throw new Error('Unsupported file type')
         }
 
         const formData = new FormData()

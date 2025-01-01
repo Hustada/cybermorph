@@ -4,12 +4,12 @@ import React, { createContext, useContext, useReducer, useCallback } from 'react
 
 export interface QueueItem {
   id: string
-  file: File
+  file: File | Blob
   targetFormat: string
   status: 'pending' | 'processing' | 'completed' | 'error'
   progress: number
-  error?: string
   result?: Blob
+  error?: string
 }
 
 interface QueueState {
