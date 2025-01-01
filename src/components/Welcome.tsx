@@ -37,7 +37,7 @@ export default function Welcome({ onStart }: WelcomeProps) {
           transition={{ delay: 0.4 }}
           className="text-cyber-cyan/80"
         >
-          Transform your images with cyberpunk style
+          The Most Advanced Image Converter in the Known Universe
         </motion.p>
         <motion.button
           initial={{ y: 20, opacity: 0 }}

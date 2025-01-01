@@ -1,18 +1,21 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { XMarkIcon, ArrowDownTrayIcon, ExclamationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { useQueue, QueueItem } from '@/context/QueueContext'
+import { useSound } from '@/context/SoundContext'
 import NeuralProcessing from './NeuralProcessing'
 
 export default function ConversionQueue() {
   const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
+  const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
   const handleDownload = (item: QueueItem) => {
     if (item.result) {
+      playDownloadSound()  // Play download sound
       const url = window.URL.createObjectURL(item.result)
       const a = document.createElement('a')
       a.href = url
@@ -25,6 +28,7 @@ export default function ConversionQueue() {
   }
 
   const handleDownloadAll = () => {
+    playDownloadSound()  // Play download sound
     const completedItems = state.items.filter(item => item.status === 'completed' && item.result)
     completedItems.forEach((item, index) => {
       setTimeout(() => handleDownload(item), index * 500)
@@ -35,9 +39,10 @@ export default function ConversionQueue() {
 
   const processQueue = useCallback(async () => {
     if (isProcessing) return
+    playSubmitSound()  // Play submit sound
     setIsProcessing(true)
     setShowNeuralProcessing(true)
-  }, [isProcessing])
+  }, [isProcessing, playSubmitSound])
 
   const handleNeuralComplete = useCallback(async () => {
     setIsProcessing(false)  // Reset processing state

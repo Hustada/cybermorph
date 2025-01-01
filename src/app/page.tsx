@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpTrayIcon, BeakerIcon } from '@heroicons/react/24/outline'
 import { useQueue } from '@/context/QueueContext'
+import { useSound } from '@/context/SoundContext'
 import ConversionQueue from '@/components/ConversionQueue'
 import CyberBackground from '@/components/CyberBackground'
 import Footer from '@/components/Footer'
@@ -13,6 +14,7 @@ import Welcome from '@/components/Welcome'
 export default function Home() {
   const [targetFormat, setTargetFormat] = useState('webp')
   const { addItems } = useQueue()
+  const { playSubmitSound } = useSound()
   const [showWelcome, setShowWelcome] = useState(true)
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -25,6 +27,7 @@ export default function Home() {
         targetFormat
       }))
       addItems(items)
+      playSubmitSound()  // Play powerUp sound when files are dropped
     }
   })
 
