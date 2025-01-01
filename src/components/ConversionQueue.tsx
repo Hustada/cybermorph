@@ -94,8 +94,24 @@ export default function ConversionQueue() {
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(errorData.error || 'Failed to convert file')
+          let errorMessage = 'Failed to convert file'
+          
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorMessage
+            if (errorData.details) {
+              console.error('Conversion details:', errorData.details)
+            }
+          } catch (e) {
+            // If response is not JSON, check status code
+            if (response.status === 504) {
+              errorMessage = 'Conversion timed out. Try with a smaller file or different format.'
+            } else if (response.status === 413) {
+              errorMessage = 'File is too large. Maximum size is 10MB.'
+            }
+          }
+          
+          throw new Error(errorMessage)
         }
 
         // Get the blob from the response

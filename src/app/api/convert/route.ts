@@ -3,6 +3,9 @@ import sharp from 'sharp'
 
 type SupportedFormat = 'webp' | 'png' | 'jpg' | 'jpeg'
 
+// Maximum file size (10MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -20,6 +23,14 @@ export async function POST(request: NextRequest) {
     if (!(file instanceof Blob)) {
       return NextResponse.json(
         { error: 'Invalid file type' },
+        { status: 400 }
+      )
+    }
+
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: 'File size exceeds 10MB limit' },
         { status: 400 }
       )
     }
@@ -42,20 +53,41 @@ export async function POST(request: NextRequest) {
       console.log('API: Creating sharp instance')
       let converter = sharp(buffer)
 
-      // Auto-rotate image based on EXIF data
+      // Get image metadata
+      const metadata = await converter.metadata()
+      console.log('API: Image metadata:', metadata)
+
+      // Resize if image is too large
+      if (metadata.width && metadata.width > 4096 || metadata.height && metadata.height > 4096) {
+        converter = converter.resize(4096, 4096, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+      }
+
+      // Auto-rotate based on EXIF
       converter = converter.rotate()
 
       console.log('API: Converting to format:', format)
       switch (format as SupportedFormat) {
         case 'webp':
-          converter = converter.webp({ quality: 80 })
+          converter = converter.webp({ 
+            quality: 80,
+            effort: 4 // Lower effort for faster processing
+          })
           break
         case 'png':
-          converter = converter.png({ quality: 80 })
+          converter = converter.png({ 
+            compressionLevel: 6, // Medium compression for balance
+            palette: true // Use palette for smaller file size
+          })
           break
         case 'jpg':
         case 'jpeg':
-          converter = converter.jpeg({ quality: 80 })
+          converter = converter.jpeg({ 
+            quality: 80,
+            mozjpeg: true // Use mozjpeg for better compression
+          })
           break
         default:
           return NextResponse.json(
