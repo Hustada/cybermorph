@@ -1,46 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 
+type SupportedFormat = 'webp' | 'png' | 'jpg' | 'jpeg'
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('file')
-    const format = formData.get('format') as string
+    const format = formData.get('format')
 
-    console.log('API: Received file:', {
-      type: file?.constructor?.name,
-      isBlob: file instanceof Blob,
-      isFile: file instanceof File,
-      hasArrayBuffer: typeof (file as any)?.arrayBuffer === 'function'
-    })
-
-    if (!file || !format) {
+    if (!file || !format || typeof format !== 'string') {
       return NextResponse.json(
         { error: 'File and format are required' },
         { status: 400 }
       )
     }
 
-    // Get file data as buffer
-    let buffer: Buffer
-    try {
-      if (typeof (file as any)?.arrayBuffer === 'function') {
-        // Handle File or Blob
-        const arrayBuffer = await (file as Blob).arrayBuffer()
-        buffer = Buffer.from(arrayBuffer)
-      } else if (typeof file === 'string') {
-        // Handle base64 or data URL
-        const base64Data = file.split(';base64,').pop()
-        if (base64Data) {
-          buffer = Buffer.from(base64Data, 'base64')
-        } else {
-          // Handle raw string data
-          buffer = Buffer.from(file)
-        }
-      } else {
-        throw new Error('Unsupported file format')
-      }
+    // Type guard for file
+    if (!(file instanceof Blob)) {
+      return NextResponse.json(
+        { error: 'Invalid file type' },
+        { status: 400 }
+      )
+    }
 
+    // Get file data as buffer
+    let buffer
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      buffer = Buffer.from(arrayBuffer)
       console.log('API: Buffer created, size:', buffer.length)
     } catch (error) {
       console.error('API: Error getting buffer:', error)
@@ -49,13 +37,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     try {
       console.log('API: Creating sharp instance')
       let converter = sharp(buffer)
 
       console.log('API: Converting to format:', format)
-      switch (format) {
+      switch (format as SupportedFormat) {
         case 'webp':
           converter = converter.webp({ quality: 80 })
           break

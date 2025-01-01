@@ -30,7 +30,7 @@ export default function NeuralProcessing({ isProcessing, onComplete }: Props) {
   const { playProcessingSound, stopProcessingSounds } = useSound()
 
   React.useEffect(() => {
-    let timeouts: NodeJS.Timeout[] = []
+    const timeouts: readonly NodeJS.Timeout[] = []
 
     if (isProcessing) {
       setShowComponent(true)
