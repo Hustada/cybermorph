@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpTrayIcon, BeakerIcon, CpuChipIcon } from '@heroicons/react/24/outline'
+import { motion } from 'framer-motion'
+import { ArrowUpTrayIcon, BeakerIcon } from '@heroicons/react/24/outline'
 import { useQueue } from '@/context/QueueContext'
 import ConversionQueue from '@/components/ConversionQueue'
 import CyberBackground from '@/components/CyberBackground'

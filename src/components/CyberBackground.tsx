@@ -4,15 +4,12 @@ import { useEffect, useRef } from 'react'
 import { motion, useScroll, useTransform, useSpring, useMotionValue, animate } from 'framer-motion'
 
 export default function CyberBackground() {
-  const containerRef = useRef<HTMLDivElement>(null)
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
   const { scrollY } = useScroll()
 
   // Parallax effects
   const y1 = useTransform(scrollY, [0, 1000], [0, 150])
-  const y2 = useTransform(scrollY, [0, 1000], [0, 250])
-  const y3 = useTransform(scrollY, [0, 1000], [0, 350])
 
   // Mouse movement effects
   const springConfig = { damping: 20, stiffness: 150 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { HeartIcon, CodeBracketIcon } from '@heroicons/react/24/outline'
+import { CodeBracketIcon } from '@heroicons/react/24/outline'
 
 export default function Footer() {
   const currentYear = new Date().getFullYear()
