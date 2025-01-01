@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useSound } from '@/context/SoundContext'
 
 interface ProcessStep {
   id: number
@@ -26,26 +27,40 @@ interface Props {
 export default function NeuralProcessing({ isProcessing, onComplete }: Props) {
   const [currentStep, setCurrentStep] = React.useState(0)
   const [showComponent, setShowComponent] = React.useState(false)
+  const { playProcessingSound, stopProcessingSounds } = useSound()
 
   React.useEffect(() => {
+    let timeouts: NodeJS.Timeout[] = []
+
     if (isProcessing) {
       setShowComponent(true)
       setCurrentStep(0)
-      
-      // Process each step sequentially
-      processSteps.forEach((step, index) => {
-        setTimeout(() => {
+      playProcessingSound()
+
+      let totalDelay = 0
+      processSteps.forEach((_, index) => {
+        const timeout = setTimeout(() => {
           setCurrentStep(index + 1)
-          if (index === processSteps.length - 1) {
-            setTimeout(() => {
-              setShowComponent(false)
-              onComplete()
-            }, 800)
-          }
-        }, processSteps.slice(0, index).reduce((acc, s) => acc + s.duration, 0))
+        }, totalDelay)
+        timeouts.push(timeout)
+        totalDelay += processSteps[index].duration
       })
+
+      // Final timeout to complete the process
+      const finalTimeout = setTimeout(() => {
+        stopProcessingSounds()
+        setShowComponent(false)
+        onComplete()
+      }, totalDelay + 800) // Add a small delay after the last step
+      timeouts.push(finalTimeout)
     }
-  }, [isProcessing, onComplete])
+
+    // Cleanup function
+    return () => {
+      timeouts.forEach(clearTimeout)
+      stopProcessingSounds()
+    }
+  }, [isProcessing, onComplete, playProcessingSound, stopProcessingSounds])
 
   return (
     <AnimatePresence>
