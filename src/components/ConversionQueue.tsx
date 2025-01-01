@@ -165,7 +165,7 @@ export default function ConversionQueue() {
       }
     }
     setIsProcessing(false)
-  }, [state.items, updateItem, isProcessing, handleConversion])
+  }, [state.items, updateItem, isProcessing, handleConversion, playSubmitSound])
 
   const handleNeuralComplete = useCallback(async () => {
     setIsProcessing(false)
@@ -183,7 +183,7 @@ export default function ConversionQueue() {
         })
       }
     }
-  }, [state.items, updateItem])
+  }, [state.items, updateItem, handleConversion])
 
   useEffect(() => {
     state.items.forEach(async (item) => {

@@ -191,7 +191,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         const formData = new FormData()
         formData.append('file', item.file)
         formData.append('format', item.targetFormat)
-        formData.append('quality', item.quality.toString())
+        formData.append('quality', (item.quality ?? 80).toString())
 
         const response = await fetch('/api/convert', {
           method: 'POST',
