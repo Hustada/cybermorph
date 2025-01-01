@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get file data as buffer
-    let buffer
+    let buffer: Buffer
     try {
       const arrayBuffer = await file.arrayBuffer()
       buffer = Buffer.from(arrayBuffer)
@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
     try {
       console.log('API: Creating sharp instance')
       let converter = sharp(buffer)
+
+      // Auto-rotate image based on EXIF data
+      converter = converter.rotate()
 
       console.log('API: Converting to format:', format)
       switch (format as SupportedFormat) {

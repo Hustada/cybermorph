@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { XMarkIcon, ArrowDownTrayIcon, ExclamationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { useQueue, QueueItem } from '@/context/QueueContext'
@@ -13,22 +13,26 @@ export default function ConversionQueue() {
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const createPreviewUrl = useCallback((file: File | Blob) => {
+    return URL.createObjectURL(file)
+  }, [])
+
   const handleDownload = (item: QueueItem) => {
     if (item.result) {
-      playDownloadSound()  // Play download sound
-      const url = window.URL.createObjectURL(item.result)
+      playDownloadSound()
+      const url = createPreviewUrl(item.result)
       const a = document.createElement('a')
       a.href = url
-      a.download = `cybermorph_${item.file.name.split('.')[0]}.${item.targetFormat}`
+      a.download = `cybermorph_${item.file instanceof File ? item.file.name.split('.')[0] : 'image'}.${item.targetFormat}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
+      URL.revokeObjectURL(url)
     }
   }
 
   const handleDownloadAll = () => {
-    playDownloadSound()  // Play download sound
+    playDownloadSound()
     const completedItems = state.items.filter(item => item.status === 'completed' && item.result)
     completedItems.forEach((item, index) => {
       setTimeout(() => handleDownload(item), index * 500)
@@ -39,13 +43,13 @@ export default function ConversionQueue() {
 
   const processQueue = useCallback(async () => {
     if (isProcessing) return
-    playSubmitSound()  // Play submit sound
+    playSubmitSound()
     setIsProcessing(true)
     setShowNeuralProcessing(true)
   }, [isProcessing, playSubmitSound])
 
   const handleNeuralComplete = useCallback(async () => {
-    setIsProcessing(false)  // Reset processing state
+    setIsProcessing(false)
     const pendingItems = state.items.filter((item) => item.status === 'pending')
 
     for (const item of pendingItems) {
@@ -58,7 +62,6 @@ export default function ConversionQueue() {
           size: item.file?.size
         })
 
-        // Handle different file types
         let fileData: File | Blob
         if (item.file instanceof File || item.file instanceof Blob) {
           fileData = item.file
@@ -98,6 +101,16 @@ export default function ConversionQueue() {
     }
   }, [state.items, updateItem])
 
+  useEffect(() => {
+    return () => {
+      state.items.forEach(item => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+      })
+    }
+  }, [state.items])
+
   if (state.items.length === 0 && !state.error) return null
 
   return (
@@ -118,7 +131,7 @@ export default function ConversionQueue() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                exit={{ opacity: 0, y: 20 }}
                 className="mb-4 p-3 bg-red-900/50 border border-red-500/50 rounded-lg flex items-center justify-between"
               >
                 <div className="flex items-center gap-2 text-red-400">
@@ -184,6 +197,21 @@ export default function ConversionQueue() {
                   exit={{ opacity: 0, x: -20 }}
                   className="bg-cyber-charcoal/50 rounded p-3 flex items-center gap-4 relative overflow-hidden"
                 >
+                  {/* Preview Image */}
+                  <div className="w-12 h-12 rounded overflow-hidden bg-cyber-black/50 border border-cyber-cyan/20 flex items-center justify-center">
+                    {item.file && (
+                      <img
+                        src={createPreviewUrl(item.file)}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onLoad={(e) => {
+                          const img = e.target as HTMLImageElement
+                          URL.revokeObjectURL(img.src)
+                        }}
+                      />
+                    )}
+                  </div>
+
                   {/* Success Animation Overlay */}
                   <AnimatePresence mode="sync">
                     {item.status === 'completed' && (
@@ -205,7 +233,7 @@ export default function ConversionQueue() {
 
                   <div className="flex-1">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm truncate">{item.file.name}</span>
+                      <span className="text-sm truncate">{item.file instanceof File ? item.file.name : 'Image'}</span>
                       <div className="flex items-center gap-2">
                         {item.status === 'completed' && item.result && (
                           <motion.button
@@ -255,7 +283,7 @@ export default function ConversionQueue() {
                         )}
                       </span>
                       <span className="text-xs text-gray-400">
-                        {(item.file.size / 1024).toFixed(2)} KB →{' '}
+                        {(item.file instanceof File ? item.file.size / 1024 : 0).toFixed(2)} KB →{' '}
                         {item.targetFormat.toUpperCase()}
                       </span>
                     </div>
