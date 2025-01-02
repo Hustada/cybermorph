@@ -8,6 +8,7 @@ interface SoundContextType {
   stopProcessingSounds: () => void
   playDownloadSound: () => void
   playSubmitSound: () => void
+  playSynthIntro4: () => Promise<void>
 }
 
 const SoundContext = createContext<SoundContextType | null>(null)
@@ -15,6 +16,7 @@ const SoundContext = createContext<SoundContextType | null>(null)
 export function SoundProvider({ children }: { children: React.ReactNode }) {
   const audioCache = useRef<{ [key: string]: HTMLAudioElement }>({})
   const processingInterval = useRef<NodeJS.Timeout>()
+  const synthIntro4Ref = useRef<HTMLAudioElement | null>(null)
 
   const playSound = useCallback(async (soundKey: string, volume: number = 1) => {
     if (!audioCache.current[soundKey]) {
@@ -57,13 +59,25 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
     playSound('synthintro4', 0.4)
   }, [playSound])
 
+  const playSynthIntro4 = useCallback(async () => {
+    if (!synthIntro4Ref.current) {
+      synthIntro4Ref.current = new Audio('/sounds/synthIntro4.wav')
+    }
+    try {
+      await synthIntro4Ref.current.play()
+    } catch (error) {
+      console.error('Error playing synthIntro4:', error)
+    }
+  }, [])
+
   return (
     <SoundContext.Provider value={{
       playIntroSequence,
       playProcessingSound,
       stopProcessingSounds,
       playDownloadSound,
-      playSubmitSound
+      playSubmitSound,
+      playSynthIntro4
     }}>
       {children}
     </SoundContext.Provider>
