@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpTrayIcon, BeakerIcon } from '@heroicons/react/24/outline'
@@ -19,8 +19,8 @@ export default function Home() {
   const [hackingModePassword, setHackingModePassword] = useState('')
   const [showUnauthorized, setShowUnauthorized] = useState(false)
 
-  const { addItems } = useQueue()
-  const { playSubmitSound, playSynthIntro4 } = useSound()
+  const { addItems, updateQueue } = useQueue()
+  const { playSubmitSound, playSynthIntro4, playDropSound } = useSound()
 
   // Check hacking mode status on mount
   useEffect(() => {
@@ -73,19 +73,45 @@ export default function Home() {
     }
   }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
-    },
-    onDrop: (acceptedFiles) => {
-      const items = acceptedFiles.map(file => ({
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    try {
+      await playDropSound()
+      
+      const validFiles = acceptedFiles.filter(file => {
+        const isValid = file.type.startsWith('image/')
+        if (!isValid) {
+          updateQueue({ type: 'SET_ERROR', error: `${file.name} is not a valid image file` })
+        }
+        return isValid
+      })
+
+      if (validFiles.length === 0) return
+
+      const items = validFiles.map(file => ({
+        id: crypto.randomUUID(),
         file,
-        targetFormat,
+        targetFormat: targetFormat || 'webp',
+        quality: 80,
+        status: 'pending' as const,
+        progress: 0,
         useLocalProcessing: isHackingMode
       }))
       addItems(items)
       playSubmitSound()
+    } catch (error) {
+      console.error('Error handling file drop:', error)
+      updateQueue({ 
+        type: 'SET_ERROR', 
+        error: 'Failed to process dropped files. Please try again.' 
+      })
     }
+  }, [playDropSound, targetFormat, isHackingMode, addItems, playSubmitSound, updateQueue])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+    },
+    onDrop,
   })
 
   if (showWelcome) {
