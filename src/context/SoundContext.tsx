@@ -9,9 +9,18 @@ interface SoundContextType {
   playDownloadSound: () => void
   playSubmitSound: () => void
   playSynthIntro4: () => Promise<void>
+  playDropSound: () => void
 }
 
 const SoundContext = createContext<SoundContextType | null>(null)
+
+export function useSound() {
+  const context = useContext(SoundContext)
+  if (!context) {
+    throw new Error('useSound must be used within a SoundProvider')
+  }
+  return context
+}
 
 export function SoundProvider({ children }: { children: React.ReactNode }) {
   const audioCache = useRef<{ [key: string]: HTMLAudioElement }>({})
@@ -59,9 +68,13 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
     playSound('synthintro4', 0.4)
   }, [playSound])
 
+  const playDropSound = useCallback(() => {
+    playSound('powerUp', 0.4)
+  }, [playSound])
+
   const playSynthIntro4 = useCallback(async () => {
     if (!synthIntro4Ref.current) {
-      synthIntro4Ref.current = new Audio('/sounds/synthIntro4.wav')
+      synthIntro4Ref.current = new Audio('/sounds/synthintro4.wav')
     }
     try {
       await synthIntro4Ref.current.play()
@@ -77,17 +90,10 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
       stopProcessingSounds,
       playDownloadSound,
       playSubmitSound,
-      playSynthIntro4
+      playSynthIntro4,
+      playDropSound
     }}>
       {children}
     </SoundContext.Provider>
   )
-}
-
-export function useSound() {
-  const context = useContext(SoundContext)
-  if (!context) {
-    throw new Error('useSound must be used within a SoundProvider')
-  }
-  return context
 }

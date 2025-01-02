@@ -7,30 +7,20 @@ import { useQueue, QueueItem } from '@/context/QueueContext'
 import { useSound } from '@/context/SoundContext'
 import NeuralProcessing from './NeuralProcessing'
 
-// Add ESLint disable comment for the img element warning since we're using data URLs
-/* eslint-disable @next/next/no-img-element */
-
 export default function ConversionQueue() {
   const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
   const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [previews, setPreviews] = useState<Record<string, string>>({})
 
-  const createPreviewUrl = useCallback(async (file: File | Blob): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        resolve(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    })
+  const createPreviewUrl = useCallback((file: File | Blob) => {
+    return URL.createObjectURL(file)
   }, [])
 
   const handleDownload = (item: QueueItem) => {
     if (item.result) {
       playDownloadSound()
-      const url = URL.createObjectURL(item.result)
+      const url = createPreviewUrl(item.result)
       const a = document.createElement('a')
       a.href = url
       a.download = `cybermorph_${item.file instanceof File ? item.file.name.split('.')[0] : 'image'}.${item.targetFormat}`
@@ -51,99 +41,12 @@ export default function ConversionQueue() {
 
   const completedCount = state.items.filter(item => item.status === 'completed').length
 
-  const handleConversion = useCallback(async (item: QueueItem) => {
-    console.log('🎬 Starting conversion for file:', {
-      name: item.file instanceof File ? item.file.name : 'Image',
-      size: item.file instanceof File ? item.file.size : 0,
-      type: item.file instanceof File ? item.file.type : '',
-      format: item.targetFormat,
-      quality: item.quality
-    })
-
-    try {
-      updateItem({
-        id: item.id,
-        status: 'processing',
-        progress: 0
-      })
-
-      let fileData: File | Blob
-      if (item.file instanceof File || item.file instanceof Blob) {
-        fileData = item.file
-      } else {
-        throw new Error('Invalid file object')
-      }
-
-      const formData = new FormData()
-      formData.append('file', fileData)
-      formData.append('format', item.targetFormat)
-      formData.append('quality', (item.quality || 80).toString())
-
-      setShowNeuralProcessing(true)
-      console.log('📤 Sending request to convert API')
-      const response = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ Conversion API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        })
-        throw new Error(errorData.error || 'Failed to process image')
-      }
-
-      console.log('✅ Received successful response from convert API')
-      const blob = await response.blob()
-      console.log('💾 Local processing result received')
-
-      updateItem({
-        id: item.id,
-        status: 'completed',
-        progress: 100,
-        result: blob
-      })
-
-      playSubmitSound()
-      console.log('✨ Conversion complete for file:', item.file instanceof File ? item.file.name : 'Image')
-    } catch (error) {
-      console.error('❌ Conversion error:', error)
-      updateItem({
-        id: item.id,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      })
-    }
-  }, [updateItem, playSubmitSound, setShowNeuralProcessing])
-
   const processQueue = useCallback(async () => {
     if (isProcessing) return
     playSubmitSound()
     setIsProcessing(true)
-
-    const pendingItems = state.items.filter((item) => item.status === 'pending')
-    if (pendingItems.length === 0) {
-      setIsProcessing(false)
-      return
-    }
-
-    for (const item of pendingItems) {
-      try {
-        await handleConversion(item)
-      } catch (error) {
-        console.error('Conversion error:', error)
-        updateItem({
-          id: item.id,
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    }
-    setIsProcessing(false)
-  }, [state.items, updateItem, isProcessing, handleConversion, playSubmitSound])
+    setShowNeuralProcessing(true)
+  }, [isProcessing, playSubmitSound])
 
   const handleNeuralComplete = useCallback(async () => {
     setIsProcessing(false)
@@ -151,7 +54,42 @@ export default function ConversionQueue() {
 
     for (const item of pendingItems) {
       try {
-        await handleConversion(item)
+        updateItem({ id: item.id, status: 'processing', progress: 0 })
+
+        console.log('Processing file:', {
+          type: item.file?.constructor?.name,
+          name: item.file?.name,
+          size: item.file?.size
+        })
+
+        let fileData: File | Blob
+        if (item.file instanceof File || item.file instanceof Blob) {
+          fileData = item.file
+        } else {
+          throw new Error('Unsupported file type')
+        }
+
+        const formData = new FormData()
+        formData.append('file', fileData)
+        formData.append('format', item.targetFormat)
+
+        const response = await fetch('/api/convert', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Conversion failed')
+        }
+
+        const resultBlob = await response.blob()
+        updateItem({
+          id: item.id,
+          status: 'completed',
+          progress: 100,
+          result: resultBlob,
+        })
       } catch (error) {
         console.error('Conversion error:', error)
         updateItem({
@@ -161,16 +99,17 @@ export default function ConversionQueue() {
         })
       }
     }
-  }, [state.items, updateItem, handleConversion])
+  }, [state.items, updateItem])
 
   useEffect(() => {
-    state.items.forEach(async (item) => {
-      if (item.file && !previews[item.id]) {
-        const previewUrl = await createPreviewUrl(item.file)
-        setPreviews(prev => ({ ...prev, [item.id]: previewUrl }))
-      }
-    })
-  }, [state.items, previews, createPreviewUrl])
+    return () => {
+      state.items.forEach(item => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+      })
+    }
+  }, [state.items])
 
   if (state.items.length === 0 && !state.error) return null
 
@@ -260,11 +199,15 @@ export default function ConversionQueue() {
                 >
                   {/* Preview Image */}
                   <div className="w-12 h-12 rounded overflow-hidden bg-cyber-black/50 border border-cyber-cyan/20 flex items-center justify-center">
-                    {previews[item.id] && (
+                    {item.file && (
                       <img
-                        src={previews[item.id]}
+                        src={createPreviewUrl(item.file)}
                         alt="Preview"
                         className="w-full h-full object-cover"
+                        onLoad={(e) => {
+                          const img = e.target as HTMLImageElement
+                          URL.revokeObjectURL(img.src)
+                        }}
                       />
                     )}
                   </div>

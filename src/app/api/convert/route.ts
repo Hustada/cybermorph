@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { cookies } from 'next/headers'
 import { uploadToCloudinary } from '@/utils/cloudinary'
+import { Readable } from 'stream'
 
 type LogData = Record<string, unknown>
 
@@ -31,16 +32,24 @@ export async function POST(request: NextRequest) {
   try {
     // Check local mode
     const cookieStore = await cookies()
-    const localMode = cookieStore.get(LOCAL_MODE_COOKIE)?.value === 'true'
+    const localModeCookie = cookieStore.get(LOCAL_MODE_COOKIE)
+    const localMode = localModeCookie?.value === 'true'
+    
+    log.info('Mode Check', { 
+      cookieExists: !!localModeCookie,
+      cookieValue: localModeCookie?.value,
+      localMode,
+      cookieName: LOCAL_MODE_COOKIE
+    })
 
     // Parse form data
     const formData = await request.formData()
     const file = formData.get('file')
-    const format = formData.get('format') as SupportedFormat
+    const format = (formData.get('format')?.toString() || 'webp') as SupportedFormat
     const quality = parseInt(formData.get('quality')?.toString() || '80', 10)
 
     // Validate inputs
-    if (!file || !format) {
+    if (!file) {
       log.error('Missing Required Fields')
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -57,11 +66,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check file size
+    // Add file size validation
     if (file.size > MAX_FILE_SIZE) {
-      log.error('File Too Large', { size: file.size, max: MAX_FILE_SIZE })
+      log.error('File Too Large', { size: file.size, maxSize: MAX_FILE_SIZE })
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 10MB.' },
+        { error: `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
         { status: 400 }
       )
     }
@@ -71,14 +80,18 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
 
     // Process based on mode
+    log.info(`Processing Mode: ${localMode ? 'Local' : 'Cloud'}`)
+    
     if (localMode) {
       return await handleLocalProcessing(buffer, format, quality)
     } else {
-      return await handleCloudProcessing(buffer, format, quality)
+      const stream = new Readable()
+      stream.push(buffer)
+      stream.push(null)
+      return await handleCloudProcessing(stream, format, quality)
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    log.error('Conversion Error:', { error: errorMessage })
+    log.error('Conversion Error:', { error })
     return NextResponse.json(
       { error: 'Failed to process request' },
       { status: 500 }
@@ -89,63 +102,20 @@ export async function POST(request: NextRequest) {
 async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, quality: number) {
   log.info('=== Starting Local Processing ===')
   try {
-    let converter = sharp(buffer, {
-      failOnError: false,
-    })
+    log.info('Processing with Sharp', { format, quality })
+    let sharpInstance = sharp(buffer)
 
-    // Verify image and get metadata
-    log.info('Getting Image Metadata')
-    const metadata = await converter.metadata()
-    if (!metadata.width || !metadata.height) {
-      log.error('Invalid Image Metadata')
-      return NextResponse.json(
-        { error: 'Invalid image file' },
-        { status: 400 }
-      )
-    }
-
-    // Calculate dimensions
-    let scale = 1
-    if (metadata.width > TARGET_SIZE || metadata.height > TARGET_SIZE) {
-      if (metadata.width > metadata.height) {
-        scale = TARGET_SIZE / metadata.width
-      } else {
-        scale = TARGET_SIZE / metadata.height
-      }
-    }
-
-    // Resize if necessary
-    if (scale < 1) {
-      converter = converter.resize(
-        Math.round(metadata.width * scale),
-        Math.round(metadata.height * scale),
-        { kernel: 'lanczos3' }
-      )
-    }
-
-    // Convert to target format
-    let outputBuffer: Buffer
+    // Apply format-specific processing
     switch (format) {
       case 'webp':
-        outputBuffer = await converter.webp({ 
-          quality,
-          effort: 4,
-          smartSubsample: true
-        }).toBuffer()
+        sharpInstance = sharpInstance.webp({ quality })
         break
       case 'png':
-        outputBuffer = await converter.png({ 
-          compressionLevel: 9,
-          palette: true,
-          quality
-        }).toBuffer()
+        sharpInstance = sharpInstance.png({ quality })
         break
       case 'jpg':
       case 'jpeg':
-        outputBuffer = await converter.jpeg({
-          quality,
-          mozjpeg: true
-        }).toBuffer()
+        sharpInstance = sharpInstance.jpeg({ quality })
         break
       default:
         log.error('Unsupported Format', { format })
@@ -155,23 +125,26 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
         )
     }
 
+    const processedBuffer = await sharpInstance.toBuffer()
+    const metadata = await sharp(processedBuffer).metadata()
+
     log.success('Local Processing Complete', {
-      inputSize: `${(buffer.length / 1024).toFixed(2)}KB`,
-      outputSize: `${(outputBuffer.length / 1024).toFixed(2)}KB`,
-      compressionRatio: `${((1 - outputBuffer.length / buffer.length) * 100).toFixed(1)}%`,
-      format,
-      quality
+      format: metadata.format,
+      size: `${(processedBuffer.length / 1024).toFixed(2)}KB`,
+      dimensions: `${metadata.width}x${metadata.height}`
     })
 
-    return new NextResponse(outputBuffer, {
-      headers: {
-        'Content-Type': `image/${format}`,
-        'Content-Length': outputBuffer.length.toString()
-      }
+    // Convert buffer to base64 for response
+    const base64 = processedBuffer.toString('base64')
+    return NextResponse.json({
+      data: `data:image/${format};base64,${base64}`,
+      format: metadata.format,
+      size: processedBuffer.length,
+      width: metadata.width,
+      height: metadata.height
     })
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    log.error('Local Processing Error:', { error: errorMessage })
+    log.error('Local Processing Error', { error })
     return NextResponse.json(
       { error: 'Failed to process image locally' },
       { status: 500 }
@@ -179,11 +152,11 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
   }
 }
 
-async function handleCloudProcessing(buffer: Buffer, format: SupportedFormat, quality: number) {
+async function handleCloudProcessing(stream: Readable, format: SupportedFormat, quality: number) {
   log.info('=== Starting Cloud Processing ===')
   try {
     log.info('Uploading to Cloudinary', { format, quality })
-    const result = await uploadToCloudinary(buffer, {
+    const result = await uploadToCloudinary(stream, {
       targetFormat: format,
       quality,
       maxWidth: TARGET_SIZE,
@@ -200,14 +173,12 @@ async function handleCloudProcessing(buffer: Buffer, format: SupportedFormat, qu
     return NextResponse.json({
       url: result.secure_url,
       format: result.format,
-      width: result.width,
-      height: result.height,
       size: result.bytes,
-      publicId: result.public_id
+      width: result.width,
+      height: result.height
     })
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    log.error('Cloud Processing Error:', { error: errorMessage })
+    log.error('Cloud Processing Error', { error })
     return NextResponse.json(
       { error: 'Failed to process image in cloud' },
       { status: 500 }

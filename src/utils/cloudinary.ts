@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary'
+import { Readable } from 'stream'
 
 // Verify environment variables
 const requiredEnvVars = [
@@ -37,50 +38,45 @@ interface CloudinaryUploadResult {
 }
 
 export async function uploadToCloudinary(
-  buffer: Buffer,
+  stream: Readable,
   options: CloudinaryUploadOptions
 ): Promise<CloudinaryUploadResult> {
-  try {
-    // Convert buffer to base64
-    const base64Data = buffer.toString('base64')
-    const dataURI = `data:image/jpeg;base64,${base64Data}`
-
-    // Prepare transformation options
-    const transformationOptions = {
-      format: options.targetFormat,
-      quality: options.quality || 'auto',
-      fetch_format: 'auto',
-      ...(options.maxWidth && { width: options.maxWidth }),
-      ...(options.maxHeight && { height: options.maxHeight }),
-      crop: 'limit'
-    }
-
-    // Upload to Cloudinary with Promise wrapper
-    return new Promise((resolve, reject) => {
-      cloudinary.uploader.upload(
-        dataURI,
-        {
-          transformation: [transformationOptions],
-          folder: 'cybermorph',
-          resource_type: 'auto',
-          timeout: 60000 // 60 seconds timeout
-        },
-        (error, result) => {
-          if (error) {
-            console.error('Cloudinary upload error:', error)
-            reject(new Error(error.message))
-          } else if (result) {
-            resolve(result as CloudinaryUploadResult)
-          } else {
-            reject(new Error('No result from Cloudinary'))
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        format: options.targetFormat,
+        quality: options.quality || 'auto',
+        width: options.maxWidth,
+        height: options.maxHeight,
+        crop: 'limit',
+        folder: 'cybermorph',
+        resource_type: 'auto',
+        timeout: 120000, // 2 minutes timeout
+        transformation: [
+          {
+            quality: options.quality || 'auto',
+            fetch_format: 'auto',
+            dpr: 'auto',
+            crop: 'limit',
+            width: options.maxWidth,
+            height: options.maxHeight
           }
+        ]
+      },
+      (error, result) => {
+        if (error) {
+          console.error('Cloudinary upload error:', error)
+          reject(error)
+        } else if (result) {
+          resolve(result as CloudinaryUploadResult)
+        } else {
+          reject(new Error('No result from Cloudinary'))
         }
-      )
-    })
-  } catch (error) {
-    console.error('Cloudinary upload error:', error)
-    throw error instanceof Error ? error : new Error('Failed to upload to Cloudinary')
-  }
+      }
+    )
+
+    stream.pipe(uploadStream)
+  })
 }
 
 export function getCloudinaryUrl(publicId: string, options: CloudinaryUploadOptions): string {
