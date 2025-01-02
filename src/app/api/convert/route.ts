@@ -3,54 +3,43 @@ import sharp from 'sharp'
 import { cookies } from 'next/headers'
 import { uploadToCloudinary } from '@/utils/cloudinary'
 
+type LogData = Record<string, unknown>
+
 // Add colored console logging
 const log = {
-  info: (msg: string, data?: any) => {
+  info: (msg: string, data?: LogData) => {
     console.log('\x1b[36m%s\x1b[0m', ' ' + msg, data ? '\n' + JSON.stringify(data, null, 2) : '')
   },
-  success: (msg: string, data?: any) => {
+  success: (msg: string, data?: LogData) => {
     console.log('\x1b[32m%s\x1b[0m', ' ' + msg, data ? '\n' + JSON.stringify(data, null, 2) : '')
   },
-  warn: (msg: string, data?: any) => {
+  warn: (msg: string, data?: LogData) => {
     console.log('\x1b[33m%s\x1b[0m', ' ' + msg, data ? '\n' + JSON.stringify(data, null, 2) : '')
   },
-  error: (msg: string, data?: any) => {
+  error: (msg: string, data?: LogData) => {
     console.error('\x1b[31m%s\x1b[0m', ' ' + msg, data ? '\n' + JSON.stringify(data, null, 2) : '')
   }
 }
-
-type SupportedFormat = 'webp' | 'png' | 'jpg' | 'jpeg'
 
 const LOCAL_MODE_COOKIE = 'local_mode'
 const TARGET_SIZE = 1920
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
-// Configure Sharp for better performance
-sharp.cache(false)
-sharp.concurrency(1)
+type SupportedFormat = 'webp' | 'png' | 'jpg' | 'jpeg'
 
 export async function POST(request: NextRequest) {
-  log.info('=== Starting New Image Conversion Request ===')
   try {
-    // Get form data
+    // Check local mode
+    const cookieStore = await cookies()
+    const localMode = cookieStore.get(LOCAL_MODE_COOKIE)?.value === 'true'
+
+    // Parse form data
     const formData = await request.formData()
     const file = formData.get('file')
-    const format = formData.get('format')?.toString().toLowerCase() as SupportedFormat
-    const quality = Number(formData.get('quality')) || 80
-    
-    // Get cookie store and check local mode
-    const cookieStore = await cookies()
-    const cookie = await cookieStore.get(LOCAL_MODE_COOKIE)
-    const useLocalProcessing = cookie !== undefined
+    const format = formData.get('format') as SupportedFormat
+    const quality = parseInt(formData.get('quality')?.toString() || '80', 10)
 
-    log.info('Request Details:', {
-      format,
-      quality,
-      mode: useLocalProcessing ? 'local' : 'cloud',
-      fileSize: file instanceof File ? `${(file.size / 1024 / 1024).toFixed(2)}MB` : 'N/A',
-      fileName: file instanceof File ? file.name : 'N/A'
-    })
-
+    // Validate inputs
     if (!file || !format) {
       log.error('Missing Required Fields')
       return NextResponse.json(
@@ -70,16 +59,10 @@ export async function POST(request: NextRequest) {
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      log.warn('File Too Large', { 
-        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-        maxSize: `${MAX_FILE_SIZE / 1024 / 1024}MB` 
-      })
+      log.error('File Too Large', { size: file.size, max: MAX_FILE_SIZE })
       return NextResponse.json(
-        { 
-          error: 'File too large',
-          suggestion: 'File size must be less than 10MB'
-        },
-        { status: 413 }
+        { error: 'File too large. Maximum size is 10MB.' },
+        { status: 400 }
       )
     }
 
@@ -88,14 +71,14 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
 
     // Process based on mode
-    log.info(`Using ${useLocalProcessing ? 'Local' : 'Cloud'} Processing`)
-    if (useLocalProcessing) {
+    if (localMode) {
       return await handleLocalProcessing(buffer, format, quality)
     } else {
       return await handleCloudProcessing(buffer, format, quality)
     }
   } catch (error) {
-    log.error('Conversion Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    log.error('Conversion Error:', { error: errorMessage })
     return NextResponse.json(
       { error: 'Failed to process request' },
       { status: 500 }
@@ -108,7 +91,6 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
   try {
     let converter = sharp(buffer, {
       failOnError: false,
-      sequentialRead: true
     })
 
     // Verify image and get metadata
@@ -122,21 +104,18 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
       )
     }
 
-    log.info('Image Dimensions', {
-      width: metadata.width,
-      height: metadata.height,
-      format: metadata.format
-    })
+    // Calculate dimensions
+    let scale = 1
+    if (metadata.width > TARGET_SIZE || metadata.height > TARGET_SIZE) {
+      if (metadata.width > metadata.height) {
+        scale = TARGET_SIZE / metadata.width
+      } else {
+        scale = TARGET_SIZE / metadata.height
+      }
+    }
 
-    // Resize if too large
-    const maxDimension = Math.max(metadata.width, metadata.height)
-    if (maxDimension > TARGET_SIZE) {
-      log.info('Resizing Image', {
-        from: maxDimension,
-        to: TARGET_SIZE,
-        scale: TARGET_SIZE / maxDimension
-      })
-      const scale = TARGET_SIZE / maxDimension
+    // Resize if necessary
+    if (scale < 1) {
       converter = converter.resize(
         Math.round(metadata.width * scale),
         Math.round(metadata.height * scale),
@@ -144,11 +123,7 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
       )
     }
 
-    // Auto-rotate based on EXIF
-    converter = converter.rotate()
-
-    // Convert based on format
-    log.info('Converting Format', { targetFormat: format, quality })
+    // Convert to target format
     let outputBuffer: Buffer
     switch (format) {
       case 'webp':
@@ -167,10 +142,9 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
         break
       case 'jpg':
       case 'jpeg':
-        outputBuffer = await converter.jpeg({ 
+        outputBuffer = await converter.jpeg({
           quality,
-          mozjpeg: true,
-          chromaSubsampling: '4:4:4'
+          mozjpeg: true
         }).toBuffer()
         break
       default:
@@ -189,16 +163,15 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
       quality
     })
 
-    // Return the converted image with proper headers
     return new NextResponse(outputBuffer, {
       headers: {
-        'Content-Type': format === 'jpg' ? 'image/jpeg' : `image/${format}`,
-        'Content-Length': outputBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=31536000'
+        'Content-Type': `image/${format}`,
+        'Content-Length': outputBuffer.length.toString()
       }
     })
   } catch (error) {
-    log.error('Local Processing Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    log.error('Local Processing Error:', { error: errorMessage })
     return NextResponse.json(
       { error: 'Failed to process image locally' },
       { status: 500 }
@@ -224,7 +197,6 @@ async function handleCloudProcessing(buffer: Buffer, format: SupportedFormat, qu
       dimensions: `${result.width}x${result.height}`
     })
 
-    // Return the processed image URL and details
     return NextResponse.json({
       url: result.secure_url,
       format: result.format,
@@ -234,7 +206,8 @@ async function handleCloudProcessing(buffer: Buffer, format: SupportedFormat, qu
       publicId: result.public_id
     })
   } catch (error) {
-    log.error('Cloud Processing Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    log.error('Cloud Processing Error:', { error: errorMessage })
     return NextResponse.json(
       { error: 'Failed to process image in cloud' },
       { status: 500 }
