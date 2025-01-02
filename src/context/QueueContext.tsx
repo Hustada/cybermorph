@@ -168,8 +168,11 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const clearCompleted = useCallback(() => {
-    dispatch({ type: 'UPDATE_ITEM', id: '', update: { status: 'pending' as const } })
-  }, [])
+    const completedItems = state.items.filter(item => item.status === 'completed')
+    completedItems.forEach(item => {
+      dispatch({ type: 'REMOVE_ITEM', id: item.id })
+    })
+  }, [state.items])
 
   const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' })
