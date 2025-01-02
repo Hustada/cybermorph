@@ -52,6 +52,14 @@ export default function ConversionQueue() {
   const completedCount = state.items.filter(item => item.status === 'completed').length
 
   const handleConversion = async (item: QueueItem) => {
+    console.log('🎬 Starting conversion for file:', {
+      name: item.file instanceof File ? item.file.name : 'Image',
+      size: item.file instanceof File ? item.file.size : 0,
+      type: item.file instanceof File ? item.file.type : '',
+      format: item.targetFormat,
+      quality: item.quality
+    })
+
     try {
       updateItem({
         id: item.id,
@@ -71,72 +79,40 @@ export default function ConversionQueue() {
       formData.append('format', item.targetFormat)
       formData.append('quality', (item.quality || 80).toString())
 
-      console.log('Converting file:', {
-        format: item.targetFormat,
-        size: fileData.size,
-        type: fileData.type,
-        quality: item.quality
-      })
-
+      console.log('📤 Sending request to convert API')
       const response = await fetch('/api/convert', {
         method: 'POST',
         body: formData,
       })
 
-      // If file is too large, try with lower quality
-      if (response.status === 413) {
-        const errorData = await response.json()
-        
-        if (errorData.suggestion && window.confirm('Image is large. Would you like to try converting with lower quality?')) {
-          // Retry with lower quality
-          retryItem(item.id, 60)
-          return
-        } else {
-          throw new Error(errorData.suggestion || 'File is too large')
-        }
-      }
-
       if (!response.ok) {
-        let errorMessage = 'Failed to convert file'
-        
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-          if (errorData.details) {
-            console.error('Conversion details:', errorData.details)
-          }
-          if (errorData.suggestion) {
-            errorMessage += '. ' + errorData.suggestion
-          }
-        } catch {
-          if (response.status === 504) {
-            errorMessage = 'Conversion timed out. Try using WebP format for better performance.'
-          }
-        }
-        
-        throw new Error(errorMessage)
+        const errorData = await response.json()
+        console.error('❌ Conversion API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        })
+        throw new Error(errorData.error || 'Failed to process image')
       }
 
-      // Get the blob from the response
+      console.log('✅ Received successful response from convert API')
       const blob = await response.blob()
-      console.log('Conversion successful:', {
-        size: blob.size,
-        type: blob.type,
-        quality: item.quality
-      })
-
+      console.log('💾 Local processing result received')
+      const url = URL.createObjectURL(blob)
       updateItem({
         id: item.id,
         status: 'completed',
         progress: 100,
         result: blob
       })
+
+      console.log('✨ Conversion complete for file:', item.file instanceof File ? item.file.name : 'Image')
     } catch (error) {
-      console.error('Conversion error:', error)
+      console.error('❌ Conversion error:', error)
       updateItem({
         id: item.id,
         status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
       })
     }
   }
