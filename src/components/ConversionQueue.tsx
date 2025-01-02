@@ -148,18 +148,18 @@ export default function ConversionQueue() {
             )}
           </AnimatePresence>
 
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
             <h3 className="text-lg font-medium text-cyber-cyan flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-cyber-cyan animate-pulse" />
               Conversion Queue
             </h3>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap justify-center sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
               {completedCount > 1 && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="px-4 py-2 rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
-                    hover:shadow-neon-cyan transition-all flex items-center gap-2"
+                  className="min-w-[120px] px-3 py-2 text-sm sm:text-base rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
+                    hover:shadow-neon-cyan transition-all flex items-center justify-center gap-2"
                   onClick={handleDownloadAll}
                 >
                   <ArrowDownTrayIcon className="w-4 h-4" />
@@ -169,7 +169,7 @@ export default function ConversionQueue() {
               <button
                 onClick={() => processQueue()}
                 disabled={isProcessing}
-                className={`px-4 py-2 rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
+                className={`min-w-[120px] px-3 py-2 text-sm sm:text-base rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
                   hover:shadow-neon-cyan transition-all ${
                     isProcessing ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
@@ -178,7 +178,7 @@ export default function ConversionQueue() {
               </button>
               <button
                 onClick={clearCompleted}
-                className="px-4 py-2 rounded border border-gray-600 hover:border-cyber-magenta 
+                className="min-w-[120px] px-3 py-2 text-sm sm:text-base rounded border border-gray-600 hover:border-cyber-magenta 
                   hover:text-cyber-magenta transition-all"
               >
                 Clear Completed

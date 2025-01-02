@@ -126,13 +126,13 @@ export default function Home() {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
               <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyber-cyan via-cyber-magenta to-cyber-cyan text-transparent bg-clip-text">
                 CyberMorph
               </h1>
               <button
                 onClick={toggleHackingMode}
-                className={`px-4 py-2 rounded text-sm transition-all duration-300
+                className={`min-w-[160px] px-4 py-2 rounded text-sm transition-all duration-300
                   ${isHackingMode 
                     ? 'bg-cyber-black text-cyber-magenta border border-cyber-magenta/30 hover:border-cyber-cyan hover:text-cyber-cyan' 
                     : 'bg-cyber-black text-cyber-cyan border border-cyber-cyan/30 hover:border-cyber-magenta hover:text-cyber-magenta'
