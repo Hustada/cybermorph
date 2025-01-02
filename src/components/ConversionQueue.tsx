@@ -13,21 +13,23 @@ export default function ConversionQueue() {
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const createPreviewUrl = useCallback((file: File | Blob) => {
+  const createPreviewUrl = useCallback((file: File | Blob | string) => {
+    if (typeof file === 'string') {
+      return file
+    }
     return URL.createObjectURL(file)
   }, [])
 
   const handleDownload = (item: QueueItem) => {
     if (item.result) {
       playDownloadSound()
-      const url = createPreviewUrl(item.result)
+      const url = item.result.url || ''
       const a = document.createElement('a')
       a.href = url
       a.download = `cybermorph_${item.file instanceof File ? item.file.name.split('.')[0] : 'image'}.${item.targetFormat}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      URL.revokeObjectURL(url)
     }
   }
 
@@ -57,9 +59,9 @@ export default function ConversionQueue() {
         updateItem({ id: item.id, status: 'processing', progress: 0 })
 
         console.log('Processing file:', {
-          type: item.file?.constructor?.name,
-          name: item.file?.name,
-          size: item.file?.size
+          type: item.file instanceof File ? item.file.type : 'unknown',
+          name: item.file instanceof File ? item.file.name : 'unknown',
+          size: item.file instanceof File || item.file instanceof Blob ? item.file.size : 0
         })
 
         let fileData: File | Blob
@@ -84,11 +86,18 @@ export default function ConversionQueue() {
         }
 
         const resultBlob = await response.blob()
+        const blobUrl = URL.createObjectURL(resultBlob)
         updateItem({
           id: item.id,
           status: 'completed',
           progress: 100,
-          result: resultBlob,
+          result: {
+            url: blobUrl,
+            format: item.targetFormat,
+            size: resultBlob.size,
+            width: 0, // We don't have this info from the blob
+            height: 0, // We don't have this info from the blob
+          },
         })
       } catch (error) {
         console.error('Conversion error:', error)
@@ -104,7 +113,7 @@ export default function ConversionQueue() {
   useEffect(() => {
     return () => {
       state.items.forEach(item => {
-        if (item.previewUrl) {
+        if (item.previewUrl && item.previewUrl.startsWith('blob:')) {
           URL.revokeObjectURL(item.previewUrl)
         }
       })
@@ -200,13 +209,20 @@ export default function ConversionQueue() {
                   {/* Preview Image */}
                   <div className="w-12 h-12 rounded overflow-hidden bg-cyber-black/50 border border-cyber-cyan/20 flex items-center justify-center">
                     {item.file && (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={createPreviewUrl(item.file)}
+                        src={item.previewUrl || createPreviewUrl(item.file)}
                         alt="Preview"
                         className="w-full h-full object-cover"
                         onLoad={(e) => {
-                          const img = e.target as HTMLImageElement
-                          URL.revokeObjectURL(img.src)
+                          if (!item.previewUrl) {
+                            const img = e.target as HTMLImageElement
+                            const url = img.src
+                            updateItem({
+                              id: item.id,
+                              previewUrl: url
+                            })
+                          }
                         }}
                       />
                     )}
