@@ -15,8 +15,5 @@
       },
       "continue": true
     }
-  ],
-  "limits": {
-    "bodySize": "10mb"
-  }
+  ]
 }
