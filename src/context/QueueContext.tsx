@@ -20,6 +20,7 @@ export interface QueueItem {
   progress: number
   error?: string
   result?: ConversionResult
+  previewUrl?: string
 }
 
 interface QueueState {

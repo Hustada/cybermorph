@@ -19,7 +19,7 @@ export default function Home() {
   const [hackingModePassword, setHackingModePassword] = useState('')
   const [showUnauthorized, setShowUnauthorized] = useState(false)
 
-  const { addItems, updateQueue } = useQueue()
+  const { addItems } = useQueue()
   const { playSubmitSound, playSynthIntro4, playDropSound } = useSound()
 
   // Check hacking mode status on mount
@@ -80,7 +80,7 @@ export default function Home() {
       const validFiles = acceptedFiles.filter(file => {
         const isValid = file.type.startsWith('image/')
         if (!isValid) {
-          updateQueue({ type: 'SET_ERROR', error: `${file.name} is not a valid image file` })
+          console.error(`${file.name} is not a valid image file`)
         }
         return isValid
       })
@@ -100,12 +100,9 @@ export default function Home() {
       playSubmitSound()
     } catch (error) {
       console.error('Error handling file drop:', error)
-      updateQueue({ 
-        type: 'SET_ERROR', 
-        error: 'Failed to process dropped files. Please try again.' 
-      })
+      console.error('Failed to process dropped files. Please try again.')
     }
-  }, [playDropSound, targetFormat, isHackingMode, addItems, playSubmitSound, updateQueue])
+  }, [playDropSound, targetFormat, isHackingMode, addItems, playSubmitSound])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
