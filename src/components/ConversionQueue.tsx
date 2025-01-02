@@ -11,7 +11,7 @@ import NeuralProcessing from './NeuralProcessing'
 /* eslint-disable @next/next/no-img-element */
 
 export default function ConversionQueue() {
-  const { state, updateItem, removeItem, clearCompleted, clearError, retryItem } = useQueue()
+  const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
   const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -51,7 +51,7 @@ export default function ConversionQueue() {
 
   const completedCount = state.items.filter(item => item.status === 'completed').length
 
-  const handleConversion = async (item: QueueItem) => {
+  const handleConversion = useCallback(async (item: QueueItem) => {
     console.log('🎬 Starting conversion for file:', {
       name: item.file instanceof File ? item.file.name : 'Image',
       size: item.file instanceof File ? item.file.size : 0,
@@ -79,6 +79,7 @@ export default function ConversionQueue() {
       formData.append('format', item.targetFormat)
       formData.append('quality', (item.quality || 80).toString())
 
+      setShowNeuralProcessing(true)
       console.log('📤 Sending request to convert API')
       const response = await fetch('/api/convert', {
         method: 'POST',
@@ -98,7 +99,7 @@ export default function ConversionQueue() {
       console.log('✅ Received successful response from convert API')
       const blob = await response.blob()
       console.log('💾 Local processing result received')
-      const url = URL.createObjectURL(blob)
+
       updateItem({
         id: item.id,
         status: 'completed',
@@ -106,6 +107,7 @@ export default function ConversionQueue() {
         result: blob
       })
 
+      playSubmitSound()
       console.log('✨ Conversion complete for file:', item.file instanceof File ? item.file.name : 'Image')
     } catch (error) {
       console.error('❌ Conversion error:', error)
@@ -115,7 +117,7 @@ export default function ConversionQueue() {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       })
     }
-  }
+  }, [updateItem, playSubmitSound, setShowNeuralProcessing])
 
   const processQueue = useCallback(async () => {
     if (isProcessing) return

@@ -27,10 +27,19 @@ interface CloudinaryUploadOptions {
   maxHeight?: number
 }
 
+interface CloudinaryUploadResult {
+  secure_url: string
+  format: string
+  bytes: number
+  width: number
+  height: number
+  public_id: string
+}
+
 export async function uploadToCloudinary(
   buffer: Buffer,
   options: CloudinaryUploadOptions
-) {
+): Promise<CloudinaryUploadResult> {
   try {
     // Convert buffer to base64
     const base64Data = buffer.toString('base64')
@@ -60,19 +69,21 @@ export async function uploadToCloudinary(
           if (error) {
             console.error('Cloudinary upload error:', error)
             reject(new Error(error.message))
+          } else if (result) {
+            resolve(result as CloudinaryUploadResult)
           } else {
-            resolve(result)
+            reject(new Error('No result from Cloudinary'))
           }
         }
       )
     })
   } catch (error) {
     console.error('Cloudinary upload error:', error)
-    throw error
+    throw error instanceof Error ? error : new Error('Failed to upload to Cloudinary')
   }
 }
 
-export function getCloudinaryUrl(publicId: string, options: CloudinaryUploadOptions) {
+export function getCloudinaryUrl(publicId: string, options: CloudinaryUploadOptions): string {
   return cloudinary.url(publicId, {
     format: options.targetFormat,
     quality: options.quality || 'auto',
