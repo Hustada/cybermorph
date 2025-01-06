@@ -198,9 +198,11 @@ export default function Home() {
         status: 'pending' as const,
         progress: 0,
         s3Key: item.key,
-        useLocalProcessing: isHackingMode
+        useLocalProcessing: isHackingMode,
+        isLarge: item.isLarge
       })))
-      logger.success('Files added to queue', { count: items.length })
+
+      logger.success('Files added to queue', { count: validFiles.length })
       playSubmitSound()
     } catch (error) {
       logger.error('Error handling file drop', { error })
