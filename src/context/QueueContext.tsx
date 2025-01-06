@@ -146,7 +146,11 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         isLarge: item.isLarge
       })
 
-      if (item.isLarge && item.s3Key) {
+      if (item.isLarge) {
+        if (!item.s3Key) {
+          throw new Error('S3 key missing for large file')
+        }
+        
         logger.info('Processing large file from S3', {
           fileName: item.file instanceof File ? item.file.name : 'unknown',
           key: item.s3Key

@@ -185,7 +185,7 @@ export default function Home() {
           }
 
           const data = await response.json()
-          return { ...data, file, isLarge: false }
+          return { key: null, file, isLarge: false }
         }
       }))
 
