@@ -106,7 +106,8 @@ const isLargeFile = (file: File | Blob | string): boolean => {
   return file.size > LARGE_FILE_THRESHOLD
 }
 
-const QueueContext = createContext<{
+// Force new build - 2025-01-05
+export const QueueContext = createContext<{
   state: QueueState
   addItems: (files: { file: File; targetFormat: string; quality?: number }[]) => void
   removeItem: (id: string) => void
