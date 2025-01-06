@@ -18,7 +18,8 @@
   ],
   "build": {
     "env": {
-      "NEXT_PUBLIC_MAX_BODY_SIZE": "10mb"
+      "NEXT_PUBLIC_MAX_BODY_SIZE": "10mb",
+      "LOCAL_MODE_PASSWORD": "test-password-123"
     }
   }
 }
