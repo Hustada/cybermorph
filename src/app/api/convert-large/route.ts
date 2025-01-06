@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPresignedUploadUrl } from '@/utils/aws'
+import { S3Client } from '@aws-sdk/client-s3'
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
+import { v4 as uuidv4 } from 'uuid'
 import { logger } from '@/utils/logger'
 
 export const runtime = 'nodejs'
@@ -9,12 +11,17 @@ export async function POST(request: NextRequest) {
   try {
     logger.info('Received large file conversion request')
     
-    const body = await request.json()
-    logger.info('Request body', body)
+    // Debug: Log all AWS-related env vars
+    logger.info('AWS Environment Variables', {
+      region: process.env.AWS_REGION,
+      bucket: process.env.AWS_BUCKET_NAME,
+      hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+      hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
+    })
     
-    const { fileName, fileType } = body
+    const { filename, contentType } = await request.json()
 
-    if (!fileName || !fileType) {
+    if (!filename || !contentType) {
       logger.warn('Missing file details')
       return NextResponse.json(
         { error: 'Missing file details' },
@@ -22,19 +29,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!process.env.AWS_BUCKET_NAME) {
-      logger.error('AWS_BUCKET_NAME not configured')
+    if (!process.env.AWS_BUCKET_NAME || !process.env.AWS_REGION) {
+      logger.error('Missing AWS configuration', {
+        bucket: !!process.env.AWS_BUCKET_NAME,
+        region: !!process.env.AWS_REGION
+      })
       return NextResponse.json(
-        { error: 'Server configuration error: AWS_BUCKET_NAME not set' },
+        { error: 'Server configuration error' },
         { status: 500 }
       )
     }
 
-    logger.info('Getting presigned URL', { fileName, fileType })
-    const { uploadUrl, key } = await getPresignedUploadUrl(fileName, fileType)
-    logger.success('Generated presigned URL', { key, uploadUrl })
+    const client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+      }
+    })
+    const key = `uploads/${uuidv4()}-${filename}`
 
-    return NextResponse.json({ uploadUrl, key })
+    const { url, fields } = await createPresignedPost(client, {
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+      Conditions: [
+        ['content-length-range', 0, 100 * 1024 * 1024], // up to 100 MB
+        ['starts-with', '$Content-Type', contentType],
+      ],
+      Fields: {
+        acl: 'public-read',
+        'Content-Type': contentType,
+      },
+      Expires: 600, // 10 minutes
+    })
+
+    logger.success('Generated presigned POST', { key })
+    return NextResponse.json({ url, fields, key })
 
   } catch (error) {
     logger.error('Error handling large file request', { 
