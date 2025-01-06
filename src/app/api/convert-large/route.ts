@@ -1,51 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { getPresignedUploadUrl } from '@/utils/aws'
 import { logger } from '@/utils/logger'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-})
-
 export async function POST(request: NextRequest) {
   try {
     logger.info('Received large file conversion request')
     
-    // Log environment variables
-    logger.info('Environment check', {
-      aws: {
-        region: process.env.AWS_REGION || 'us-east-1',
-        bucket: process.env.AWS_BUCKET_NAME,
-        hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
-        hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
-      }
-    })
-
     const body = await request.json()
-    const { fileName, fileType, fileSize } = body
+    logger.info('Request body', body)
+    
+    const { fileName, fileType } = body
 
     if (!fileName || !fileType) {
       logger.warn('Missing file details')
       return NextResponse.json(
         { error: 'Missing file details' },
         { status: 400 }
-      )
-    }
-
-    if (fileSize > MAX_FILE_SIZE) {
-      logger.warn('File too large', { size: fileSize, maxSize: MAX_FILE_SIZE })
-      return NextResponse.json(
-        { error: 'File too large. Maximum size is 10MB' },
-        { status: 413 }
       )
     }
 
@@ -57,23 +30,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    logger.info('Request details', { 
-      fileName: fileName,
-      fileType: fileType,
-      fileSize: fileSize
-    })
-
-    // Generate a unique key for the file
-    const key = `uploads/${Date.now()}-${fileName}`
-
-    const command = new PutObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: key,
-      ContentType: fileType,
-    })
-
-    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
-    logger.success('Generated presigned URL', { key })
+    logger.info('Getting presigned URL', { fileName, fileType })
+    const { uploadUrl, key } = await getPresignedUploadUrl(fileName, fileType)
+    logger.success('Generated presigned URL', { key, uploadUrl })
 
     return NextResponse.json({ uploadUrl, key })
 
