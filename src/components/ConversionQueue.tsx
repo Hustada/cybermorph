@@ -8,7 +8,7 @@ import { useSound } from '@/context/SoundContext'
 import NeuralProcessing from './NeuralProcessing'
 
 export default function ConversionQueue() {
-  const { state, updateItem, removeItem, clearCompleted, clearError } = useQueue()
+  const { state, removeItem, clearQueue, processQueue } = useQueue()
   const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -20,95 +20,72 @@ export default function ConversionQueue() {
     return URL.createObjectURL(file)
   }, [])
 
-  const handleDownload = (item: QueueItem) => {
-    if (item.result) {
+  const handleDownload = async (item: QueueItem) => {
+    if (!item.result) return
+    
+    try {
       playDownloadSound()
-      const url = item.result.url || ''
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `cybermorph_${item.file instanceof File ? item.file.name.split('.')[0] : 'image'}.${item.targetFormat}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      
+      // Get the filename
+      const filename = item.file instanceof File 
+        ? item.file.name.split('.')[0] 
+        : 'image'
+      const fullFilename = `cybermorph_${filename}.${item.targetFormat}`
+
+      // If it's a base64 data URL
+      if (item.result.data) {
+        const link = document.createElement('a')
+        link.href = item.result.data
+        link.download = fullFilename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } 
+      // If it's a Cloudinary URL
+      else if (item.result.url) {
+        // Fetch the image first
+        const response = await fetch(item.result.url)
+        const blob = await response.blob()
+        const blobUrl = URL.createObjectURL(blob)
+        
+        const link = document.createElement('a')
+        link.href = blobUrl
+        link.download = fullFilename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        // Clean up the blob URL
+        URL.revokeObjectURL(blobUrl)
+      }
+    } catch (error) {
+      console.error('Download error:', error)
     }
   }
 
-  const handleDownloadAll = () => {
+  const handleDownloadAll = async () => {
     playDownloadSound()
     const completedItems = state.items.filter(item => item.status === 'completed' && item.result)
-    completedItems.forEach((item, index) => {
-      setTimeout(() => handleDownload(item), index * 500)
-    })
+    
+    // Process downloads sequentially with a delay
+    for (let i = 0; i < completedItems.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500)) // 500ms delay between downloads
+      await handleDownload(completedItems[i])
+    }
   }
 
   const completedCount = state.items.filter(item => item.status === 'completed').length
 
-  const processQueue = useCallback(async () => {
-    if (isProcessing) return
-    playSubmitSound()
-    setIsProcessing(true)
-    setShowNeuralProcessing(true)
+  useEffect(() => {
+    if (isProcessing && playSubmitSound) {
+      playSubmitSound()
+    }
   }, [isProcessing, playSubmitSound])
 
   const handleNeuralComplete = useCallback(async () => {
     setIsProcessing(false)
-    const pendingItems = state.items.filter((item) => item.status === 'pending')
-
-    for (const item of pendingItems) {
-      try {
-        updateItem({ id: item.id, status: 'processing', progress: 0 })
-
-        console.log('Processing file:', {
-          type: item.file instanceof File ? item.file.type : 'unknown',
-          name: item.file instanceof File ? item.file.name : 'unknown',
-          size: item.file instanceof File || item.file instanceof Blob ? item.file.size : 0
-        })
-
-        let fileData: File | Blob
-        if (item.file instanceof File || item.file instanceof Blob) {
-          fileData = item.file
-        } else {
-          throw new Error('Unsupported file type')
-        }
-
-        const formData = new FormData()
-        formData.append('file', fileData)
-        formData.append('format', item.targetFormat)
-
-        const response = await fetch('/api/convert', {
-          method: 'POST',
-          body: formData,
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || 'Conversion failed')
-        }
-
-        const resultBlob = await response.blob()
-        const blobUrl = URL.createObjectURL(resultBlob)
-        updateItem({
-          id: item.id,
-          status: 'completed',
-          progress: 100,
-          result: {
-            url: blobUrl,
-            format: item.targetFormat,
-            size: resultBlob.size,
-            width: 0, // We don't have this info from the blob
-            height: 0, // We don't have this info from the blob
-          },
-        })
-      } catch (error) {
-        console.error('Conversion error:', error)
-        updateItem({
-          id: item.id,
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
-      }
-    }
-  }, [state.items, updateItem])
+    await processQueue()
+  }, [processQueue])
 
   useEffect(() => {
     return () => {
@@ -148,7 +125,7 @@ export default function ConversionQueue() {
                   <span>{state.error}</span>
                 </div>
                 <button
-                  onClick={clearError}
+                  onClick={() => clearQueue()}
                   className="p-1 hover:text-red-400 transition-colors"
                 >
                   <XMarkIcon className="w-4 h-4" />
@@ -176,7 +153,10 @@ export default function ConversionQueue() {
                 </motion.button>
               )}
               <button
-                onClick={() => processQueue()}
+                onClick={() => {
+                  setIsProcessing(true)
+                  setShowNeuralProcessing(true)
+                }}
                 disabled={isProcessing}
                 className={`min-w-[120px] px-3 py-2 text-sm sm:text-base rounded bg-gradient-to-r from-cyber-cyan to-cyber-magenta
                   hover:shadow-neon-cyan transition-all ${
@@ -186,11 +166,11 @@ export default function ConversionQueue() {
                 Process Queue
               </button>
               <button
-                onClick={clearCompleted}
+                onClick={clearQueue}
                 className="min-w-[120px] px-3 py-2 text-sm sm:text-base rounded border border-gray-600 hover:border-cyber-magenta 
                   hover:text-cyber-magenta transition-all"
               >
-                Clear Completed
+                Clear Queue
               </button>
             </div>
           </div>
@@ -214,16 +194,6 @@ export default function ConversionQueue() {
                         src={item.previewUrl || createPreviewUrl(item.file)}
                         alt="Preview"
                         className="w-full h-full object-cover"
-                        onLoad={(e) => {
-                          if (!item.previewUrl) {
-                            const img = e.target as HTMLImageElement
-                            const url = img.src
-                            updateItem({
-                              id: item.id,
-                              previewUrl: url
-                            })
-                          }
-                        }}
                       />
                     )}
                   </div>

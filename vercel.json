@@ -16,6 +16,17 @@
       "continue": true
     }
   ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
   "build": {
     "env": {
       "NEXT_PUBLIC_MAX_BODY_SIZE": "10mb"

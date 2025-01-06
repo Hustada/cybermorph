@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
-import { uploadToCloudinary } from '@/utils/cloudinary'
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { v2, UploadApiResponse } from 'cloudinary'
 import { Readable } from 'stream'
 import { logger } from '@/utils/logger'
 
@@ -8,84 +8,100 @@ const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+  }
 })
 
 export async function POST(request: NextRequest) {
   try {
     logger.info('Starting large file processing')
     
-    const { key, format, quality } = await request.json()
-    logger.debug('Process request details', { key, format, quality })
+    const formData = await request.formData()
+    const file = formData.get('file')
+    const format = formData.get('format')?.toString() || 'webp'
+    const quality = parseInt(formData.get('quality')?.toString() || '80', 10)
 
-    if (!key || !format) {
-      logger.warn('Missing required fields', { key, format })
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+    if (!file || !(file instanceof File)) {
+      logger.warn('No file provided')
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    // Get file from S3
-    logger.info('Fetching file from S3', { key })
-    const getCommand = new GetObjectCommand({
+    // Get the file buffer
+    const buffer = Buffer.from(await file.arrayBuffer())
+
+    // Upload to S3
+    const key = `uploads/${Date.now()}-${file.name}`
+    logger.info('Uploading to S3', { key })
+    await s3Client.send(new PutObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
+      Body: buffer,
+      ContentType: file.type
+    }))
+    logger.success('File uploaded to S3', { key })
+
+    // Upload to Cloudinary
+    v2.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET
     })
 
-    const s3Response = await s3Client.send(getCommand)
-    logger.success('File fetched from S3', { 
-      contentType: s3Response.ContentType,
-      contentLength: s3Response.ContentLength 
-    })
-
-    if (!s3Response.Body) {
-      logger.error('No file content received from S3')
-      throw new Error('No file content received from S3')
-    }
-
-    // Convert S3 readable stream
-    const stream = s3Response.Body as Readable
-
-    // Upload to Cloudinary with transformation
     logger.info('Uploading to Cloudinary', { format, quality })
-    const result = await uploadToCloudinary(stream, {
-      targetFormat: format,
-      quality: quality || 80,
+    const uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
+      const uploadStream = v2.uploader.upload_stream(
+        {
+          folder: 'cybermorph',
+          format,
+          quality: quality,
+          transformation: [
+            { width: 1920, height: 1920, crop: 'limit' }
+          ]
+        },
+        (error, result) => {
+          if (error) reject(error)
+          if (result) resolve(result)
+        }
+      )
+
+      const readStream = new Readable()
+      readStream._read = () => {}
+      readStream.push(buffer)
+      readStream.push(null)
+      readStream.pipe(uploadStream)
     })
-    
-    logger.success('File processed and uploaded to Cloudinary', {
-      publicId: result.public_id,
-      format: result.format,
-      size: result.bytes
+    logger.success('File uploaded to Cloudinary', {
+      publicId: uploadResult.public_id,
+      format: uploadResult.format,
+      size: uploadResult.bytes,
+      width: uploadResult.width,
+      height: uploadResult.height
     })
 
     // Cleanup: Delete file from S3
     logger.info('Cleaning up S3 file', { key })
-    const deleteCommand = new DeleteObjectCommand({
+    await s3Client.send(new DeleteObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
-    })
-    await s3Client.send(deleteCommand)
+    }))
     logger.success('S3 file deleted', { key })
 
     return NextResponse.json({
       success: true,
       result: {
-        url: result.secure_url,
-        format: result.format,
-        size: result.bytes,
-        width: result.width,
-        height: result.height,
+        url: uploadResult.secure_url,
+        format: uploadResult.format,
+        size: uploadResult.bytes,
+        width: uploadResult.width,
+        height: uploadResult.height
       }
     })
-
   } catch (error) {
-    logger.error('Error processing large file', { error })
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    logger.error('Process error', { 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    })
     return NextResponse.json(
-      { error: `Failed to process file: ${errorMessage}` },
+      { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

@@ -1,14 +1,15 @@
 'use client'
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react'
+import { logger } from '@/utils/logger'
 
 interface ConversionResult {
   url?: string
   data?: string
-  format: string
-  size: number
-  width: number
-  height: number
+  format?: string
+  size?: number
+  width?: number
+  height?: number
 }
 
 export interface QueueItem {
@@ -17,251 +18,259 @@ export interface QueueItem {
   targetFormat: string
   quality: number
   status: 'pending' | 'processing' | 'completed' | 'error'
-  progress: number
+  progress?: number
   error?: string
   result?: ConversionResult
   previewUrl?: string
+  s3Key?: string
 }
 
 interface QueueState {
   items: QueueItem[]
   error?: string
-  isProcessing: boolean
 }
 
 type QueueAction =
-  | { type: 'ADD_ITEMS'; items: Partial<QueueItem>[] }
-  | { type: 'UPDATE_ITEM'; id: string; update: Partial<QueueItem> }
-  | { type: 'REMOVE_ITEM'; id: string }
-  | { type: 'SET_ERROR'; error: string }
+  | { type: 'ADD_ITEMS'; payload: QueueItem[] }
+  | { type: 'UPDATE_ITEM'; payload: Partial<QueueItem> & { id: string } }
+  | { type: 'REMOVE_ITEM'; payload: string }
+  | { type: 'CLEAR_QUEUE' }
+  | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
-  | { type: 'SET_PROCESSING'; payload: boolean }
   | { type: 'RETRY_ITEM'; payload: { id: string; quality?: number } }
 
 const MAX_QUEUE_SIZE = 5
+const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
 
 const initialState: QueueState = {
   items: [],
-  error: undefined,
-  isProcessing: false
 }
 
 function queueReducer(state: QueueState, action: QueueAction): QueueState {
   switch (action.type) {
-    case 'ADD_ITEMS': {
-      const pendingItems = state.items.filter(item => item.status === 'pending')
-      const availableSlots = MAX_QUEUE_SIZE - pendingItems.length
-      
-      if (availableSlots <= 0) {
-        return {
-          ...state,
-          error: `Queue limit reached (max ${MAX_QUEUE_SIZE} pending items). Please wait for current items to complete.`
-        }
-      }
-
-      const newItems: QueueItem[] = action.items
-        .slice(0, availableSlots)
-        .map(item => ({
-          id: crypto.randomUUID(),
-          file: item.file!,
-          targetFormat: item.targetFormat || 'webp',
-          quality: item.quality ?? 80,
-          status: 'pending' as const,
-          progress: 0
-        }))
-
-      if (action.items.length > availableSlots) {
-        return {
-          ...state,
-          items: [...state.items, ...newItems],
-          error: `Only ${availableSlots} item${availableSlots === 1 ? '' : 's'} added. Queue limit reached.`
-        }
-      }
-
+    case 'ADD_ITEMS':
       return {
         ...state,
-        items: [...state.items, ...newItems],
-        error: undefined
+        items: [...state.items, ...action.payload].slice(0, MAX_QUEUE_SIZE),
       }
-    }
-
     case 'UPDATE_ITEM':
       return {
         ...state,
-        items: state.items.map(item =>
-          item.id === action.id
-            ? { ...item, ...action.update }
+        items: state.items.map((item) =>
+          item.id === action.payload.id
+            ? { ...item, ...action.payload }
             : item
-        )
+        ),
       }
-
     case 'REMOVE_ITEM':
       return {
         ...state,
-        items: state.items.filter(item => item.id !== action.id),
-        error: undefined
+        items: state.items.filter((item) => item.id !== action.payload),
       }
-
+    case 'CLEAR_QUEUE':
+      return {
+        ...state,
+        items: [],
+      }
     case 'SET_ERROR':
       return {
         ...state,
-        error: action.error
+        error: action.payload,
       }
-
     case 'CLEAR_ERROR':
       return {
         ...state,
-        error: undefined
+        error: undefined,
       }
-
-    case 'SET_PROCESSING':
-      return {
-        ...state,
-        isProcessing: action.payload,
-      }
-
     case 'RETRY_ITEM':
       return {
         ...state,
-        items: state.items.map(item =>
+        items: state.items.map((item) =>
           item.id === action.payload.id
             ? {
                 ...item,
-                status: 'pending' as const,
-                progress: 0,
+                status: 'pending',
                 error: undefined,
-                result: undefined,
-                quality: action.payload.quality ?? item.quality ?? 80
+                quality: action.payload.quality || item.quality,
               }
             : item
         ),
       }
-
     default:
       return state
   }
 }
 
+const isLargeFile = (file: File | Blob | string): boolean => {
+  if (typeof file === 'string') return false
+  return file.size > LARGE_FILE_THRESHOLD
+}
+
 const QueueContext = createContext<{
   state: QueueState
   addItems: (files: { file: File; targetFormat: string; quality?: number }[]) => void
-  updateItem: (update: Partial<QueueItem> & { id: string }) => void
   removeItem: (id: string) => void
-  clearCompleted: () => void
-  clearError: () => void
-  processQueue: () => Promise<void>
+  clearQueue: () => void
   retryItem: (id: string, quality?: number) => void
+  processQueue: () => Promise<void>
 } | null>(null)
 
 export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(queueReducer, initialState)
 
-  const addItems = useCallback((files: { file: File; targetFormat: string; quality?: number }[]) => {
-    dispatch({ type: 'ADD_ITEMS', items: files })
-  }, [])
-
   const updateItem = useCallback((update: Partial<QueueItem> & { id: string }) => {
-    dispatch({ type: 'UPDATE_ITEM', id: update.id, update })
+    dispatch({ type: 'UPDATE_ITEM', payload: update })
   }, [])
 
-  const removeItem = useCallback((id: string) => {
-    dispatch({ type: 'REMOVE_ITEM', id })
-  }, [])
-
-  const clearCompleted = useCallback(() => {
-    const completedItems = state.items.filter(item => item.status === 'completed')
-    completedItems.forEach(item => {
-      dispatch({ type: 'REMOVE_ITEM', id: item.id })
+  const updateItemStatus = useCallback((
+    id: string, 
+    status: QueueItem['status'], 
+    error?: string
+  ) => {
+    updateItem({ 
+      id, 
+      status, 
+      error,
+      ...(status === 'processing' ? { progress: 0 } : {})
     })
-  }, [state.items])
+  }, [updateItem])
 
-  const clearError = useCallback(() => {
-    dispatch({ type: 'CLEAR_ERROR' })
-  }, [])
+  const updateItemResult = useCallback((
+    id: string, 
+    result: ConversionResult
+  ) => {
+    updateItem({ id, result })
+  }, [updateItem])
 
   const processItem = useCallback(async (item: QueueItem) => {
     try {
-      dispatch({
-        type: 'UPDATE_ITEM',
-        id: item.id,
-        update: { status: 'processing' as const, progress: 0 }
+      let fileData: File | Blob
+      if (item.file instanceof File || item.file instanceof Blob) {
+        fileData = item.file
+      } else {
+        throw new Error('Unsupported file type')
+      }
+
+      logger.info('Starting item processing', { 
+        fileName: item.file instanceof File ? item.file.name : 'unknown',
+        format: item.targetFormat,
+        isLarge: isLargeFile(fileData)
       })
 
+      updateItemStatus(item.id, 'processing')
+      
       const formData = new FormData()
-      formData.append('file', item.file)
-      formData.append('format', item.targetFormat || 'webp')
-      formData.append('quality', (item.quality ?? 80).toString())
+      formData.append('file', fileData)
+      formData.append('format', item.targetFormat)
+      formData.append('quality', item.quality.toString())
 
-      const response = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData
-      })
+      let response: Response
+      
+      if (isLargeFile(fileData)) {
+        logger.info('Processing large file', { fileName: item.file instanceof File ? item.file.name : 'unknown' })
+        if (!item.s3Key) {
+          throw new Error('Missing S3 key for large file')
+        }
+        
+        response = await fetch('/api/process-large', {
+          method: 'POST',
+          body: JSON.stringify({
+            key: item.s3Key,
+            format: item.targetFormat,
+            quality: item.quality,
+          }),
+        })
+      } else {
+        logger.info('Processing regular file', { fileName: item.file instanceof File ? item.file.name : 'unknown' })
+        response = await fetch('/api/convert', {
+          method: 'POST',
+          body: formData,
+        })
+      }
 
       if (!response.ok) {
-        throw new Error('Failed to convert image')
+        const errorData = await response.json()
+        logger.error('Processing failed', { 
+          fileName: item.file instanceof File ? item.file.name : 'unknown',
+          status: response.status,
+          error: errorData 
+        })
+        throw new Error(errorData.error || 'Failed to process file')
       }
 
       const result = await response.json()
-      const conversionResult: ConversionResult = {
-        url: result.url,
-        data: result.data,
-        format: item.targetFormat,
-        size: result.size || 0,
-        width: result.width || 0,
-        height: result.height || 0
-      }
-
-      dispatch({
-        type: 'UPDATE_ITEM',
-        id: item.id,
-        update: {
-          status: 'completed' as const,
-          progress: 100,
-          result: conversionResult
-        }
+      logger.success('Processing completed', { 
+        fileName: item.file instanceof File ? item.file.name : 'unknown',
+        format: result.format,
+        size: result.size 
       })
+      
+      updateItemResult(item.id, result)
+      updateItemStatus(item.id, 'completed')
+      
     } catch (error) {
-      dispatch({
-        type: 'UPDATE_ITEM',
-        id: item.id,
-        update: {
-          status: 'error' as const,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }
+      logger.error('Processing error', { 
+        fileName: item.file instanceof File ? item.file.name : 'unknown',
+        error 
       })
+      updateItemStatus(item.id, 'error', error instanceof Error ? error.message : 'Unknown error')
     }
-  }, [])
+  }, [updateItemStatus, updateItemResult])
 
   const processQueue = useCallback(async () => {
-    if (state.isProcessing) return
-
-    dispatch({ type: 'SET_PROCESSING', payload: true })
-    const pendingItems = state.items.filter((item) => item.status === 'pending')
-
+    const pendingItems = state.items.filter(item => item.status === 'pending')
     for (const item of pendingItems) {
       await processItem(item)
     }
+  }, [state.items, processItem])
 
-    dispatch({ type: 'SET_PROCESSING', payload: false })
-  }, [state.isProcessing, state.items, processItem])
+  const addItems = useCallback((
+    files: { file: File; targetFormat: string; quality?: number }[]
+  ) => {
+    const newItems: QueueItem[] = files.map((file) => ({
+      id: Math.random().toString(36).substring(7),
+      file: file.file,
+      targetFormat: file.targetFormat,
+      quality: file.quality || 80,
+      status: 'pending',
+      previewUrl: URL.createObjectURL(file.file),
+    }))
+
+    dispatch({ type: 'ADD_ITEMS', payload: newItems })
+  }, [])
+
+  const removeItem = useCallback((id: string) => {
+    const item = state.items.find(item => item.id === id)
+    if (item?.previewUrl) {
+      URL.revokeObjectURL(item.previewUrl)
+    }
+    dispatch({ type: 'REMOVE_ITEM', payload: id })
+  }, [state.items])
+
+  const clearQueue = useCallback(() => {
+    state.items.forEach(item => {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl)
+      }
+    })
+    dispatch({ type: 'CLEAR_QUEUE' })
+  }, [state.items])
 
   const retryItem = useCallback((id: string, quality?: number) => {
     dispatch({ type: 'RETRY_ITEM', payload: { id, quality } })
   }, [])
 
+  const value = {
+    state,
+    addItems,
+    removeItem,
+    clearQueue,
+    retryItem,
+    processQueue,
+  }
+
   return (
-    <QueueContext.Provider
-      value={{
-        state,
-        addItems,
-        updateItem,
-        removeItem,
-        clearCompleted,
-        clearError,
-        processQueue,
-        retryItem,
-      }}
-    >
+    <QueueContext.Provider value={value}>
       {children}
     </QueueContext.Provider>
   )

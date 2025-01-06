@@ -5,13 +5,22 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000']
+      bodySizeLimit: '10mb'
     }
   },
   images: {
     domains: ['res.cloudinary.com'],
+    unoptimized: true
   },
   webpack: (config, { isServer }) => {
+    // Fixes npm packages that depend on `fs` module
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      }
+    }
     return config
   }
 }

@@ -55,8 +55,7 @@ export async function uploadToCloudinary(
         transformation: [
           {
             quality: options.quality || 'auto',
-            fetch_format: 'auto',
-            dpr: 'auto',
+            format: options.targetFormat,
             crop: 'limit',
             width: options.maxWidth,
             height: options.maxHeight
