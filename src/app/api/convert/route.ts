@@ -91,14 +91,14 @@ export async function POST(request: NextRequest) {
     log.info(`Processing Mode: ${localMode ? 'Local' : 'Cloud'}`)
     
     if (localMode) {
-      return await handleLocalProcessing(buffer, format, quality)
+      return await handleLocalProcessing(buffer, format, quality, headers)
     } else {
       // Create a proper readable stream
       const stream = new Readable()
       stream._read = () => {} // Required for custom readable streams
       stream.push(buffer)
       stream.push(null)
-      return await handleCloudProcessing(stream, format, quality)
+      return await handleCloudProcessing(stream, format, quality, headers)
     }
   } catch (error) {
     log.error('Conversion Error:', { error })
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, quality: number) {
+async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, quality: number, headers: HeadersInit) {
   log.info('=== Starting Local Processing ===')
   try {
     // First verify we can read the image
@@ -177,7 +177,7 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
   }
 }
 
-async function handleCloudProcessing(stream: Readable, format: SupportedFormat, quality: number) {
+async function handleCloudProcessing(stream: Readable, format: SupportedFormat, quality: number, headers: HeadersInit) {
   log.info('=== Starting Cloud Processing ===')
   try {
     log.info('Uploading to Cloudinary', { format, quality })
