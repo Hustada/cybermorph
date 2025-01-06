@@ -19,7 +19,14 @@
   "build": {
     "env": {
       "NEXT_PUBLIC_MAX_BODY_SIZE": "10mb",
-      "LOCAL_MODE_PASSWORD": "test-password-123"
+      "LOCAL_MODE_PASSWORD": "test-password-123",
+      "CLOUDINARY_CLOUD_NAME": "test-cloud",
+      "CLOUDINARY_API_KEY": "test-key",
+      "CLOUDINARY_API_SECRET": "test-secret",
+      "AWS_ACCESS_KEY_ID": "test-aws-key",
+      "AWS_SECRET_ACCESS_KEY": "test-aws-secret",
+      "AWS_REGION": "us-west-2",
+      "AWS_BUCKET_NAME": "test-bucket"
     }
   }
 }
