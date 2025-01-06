@@ -29,6 +29,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 type SupportedFormat = 'webp' | 'png' | 'jpg' | 'jpeg'
 
 export async function POST(request: NextRequest) {
+  const headers = {
+    'Cache-Control': 'no-store, must-revalidate'
+  };
+
   try {
     // Check local mode
     const cookieStore = await cookies()

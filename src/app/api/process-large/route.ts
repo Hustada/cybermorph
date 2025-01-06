@@ -13,6 +13,10 @@ const s3Client = new S3Client({
 })
 
 export async function POST(request: NextRequest) {
+  const headers = {
+    'Cache-Control': 'no-store, must-revalidate'
+  };
+
   try {
     logger.info('Starting large file processing')
     
@@ -23,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     if (!file || !(file instanceof File)) {
       logger.warn('No file provided')
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      return NextResponse.json({ error: 'No file provided' }, { status: 400, headers })
     }
 
     // Get the file buffer
@@ -95,14 +99,14 @@ export async function POST(request: NextRequest) {
         width: uploadResult.width,
         height: uploadResult.height
       }
-    })
+    }, { headers })
   } catch (error) {
     logger.error('Process error', { 
       error: error instanceof Error ? error.message : 'Unknown error' 
     })
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: 500, headers }
     )
   }
 }
