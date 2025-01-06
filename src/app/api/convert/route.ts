@@ -48,34 +48,32 @@ export async function POST(request: NextRequest) {
 
     // Parse form data
     const formData = await request.formData()
+    if (!formData) {
+      log.error('Missing Required Fields')
+      return NextResponse.json(
+        { error: 'No form data provided' },
+        { status: 400, headers }
+      )
+    }
+
     const file = formData.get('file')
+    if (!file || !(file instanceof File)) {
+      log.error('Invalid File Type')
+      return NextResponse.json(
+        { error: 'No file provided' },
+        { status: 400, headers }
+      )
+    }
+
     const format = (formData.get('format')?.toString() || 'webp') as SupportedFormat
     const quality = parseInt(formData.get('quality')?.toString() || '80', 10)
 
-    // Validate inputs
-    if (!file) {
-      log.error('Missing Required Fields')
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
     // Validate file
-    if (!(file instanceof File)) {
-      log.error('Invalid File Type')
-      return NextResponse.json(
-        { error: 'Invalid file' },
-        { status: 400 }
-      )
-    }
-
-    // Add file size validation
     if (file.size > MAX_FILE_SIZE) {
       log.error('File Too Large', { size: file.size, maxSize: MAX_FILE_SIZE })
       return NextResponse.json(
         { error: `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
-        { status: 400 }
+        { status: 400, headers }
       )
     }
 
@@ -106,7 +104,7 @@ export async function POST(request: NextRequest) {
     log.error('Conversion Error:', { error })
     return NextResponse.json(
       { error: 'Failed to process request' },
-      { status: 500 }
+      { status: 500, headers }
     )
   }
 }
@@ -169,12 +167,12 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
       size: processedBuffer.length,
       width: processedMetadata.width || 0,
       height: processedMetadata.height || 0
-    })
+    }, { headers })
   } catch (error) {
     log.error('Local Processing Error', { error })
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to process image' },
-      { status: 500 }
+      { status: 500, headers }
     )
   }
 }
@@ -203,12 +201,12 @@ async function handleCloudProcessing(stream: Readable, format: SupportedFormat, 
       size: result.bytes,
       width: result.width,
       height: result.height
-    })
+    }, { headers })
   } catch (error) {
     log.error('Cloud Processing Error', { error })
     return NextResponse.json(
       { error: 'Failed to process image in cloud' },
-      { status: 500 }
+      { status: 500, headers }
     )
   }
 }
