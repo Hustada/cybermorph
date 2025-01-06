@@ -2,8 +2,7 @@
   "functions": {
     "src/app/api/convert-large/route.ts": {
       "memory": 1024,
-      "maxDuration": 60,
-      "maxBodySize": "10mb"
+      "maxDuration": 60
     }
   },
   "headers": [
