@@ -23,6 +23,7 @@ export interface QueueItem {
   result?: ConversionResult
   previewUrl?: string
   s3Key?: string
+  isLarge?: boolean
 }
 
 interface QueueState {
@@ -144,74 +145,64 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
 
   const processItem = useCallback(async (item: QueueItem) => {
     try {
-      let fileData: File | Blob
-      if (item.file instanceof File || item.file instanceof Blob) {
-        fileData = item.file
-      } else {
-        throw new Error('Unsupported file type')
-      }
-
-      logger.info('Starting item processing', { 
+      updateItemStatus(item.id, 'processing')
+      logger.info('Starting item processing', {
         fileName: item.file instanceof File ? item.file.name : 'unknown',
         format: item.targetFormat,
-        isLarge: isLargeFile(fileData)
+        isLarge: isLargeFile(item.file)
       })
 
-      updateItemStatus(item.id, 'processing')
-      
-      const formData = new FormData()
-      formData.append('file', fileData)
-      formData.append('format', item.targetFormat)
-      formData.append('quality', item.quality.toString())
-
-      let response: Response
-      
-      if (isLargeFile(fileData)) {
-        logger.info('Processing large file', { fileName: item.file instanceof File ? item.file.name : 'unknown' })
-        if (!item.s3Key) {
-          throw new Error('Missing S3 key for large file')
-        }
+      if (item.isLarge && item.s3Key) {
+        logger.info('Processing large file from S3', {
+          fileName: item.file instanceof File ? item.file.name : 'unknown',
+          key: item.s3Key
+        })
         
-        response = await fetch('/api/process-large', {
+        const response = await fetch('/api/process-large', {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             key: item.s3Key,
             format: item.targetFormat,
-            quality: item.quality,
+            fileName: item.file instanceof File ? item.file.name : 'unknown'
           }),
         })
+
+        if (!response.ok) {
+          throw new Error('Failed to process large file')
+        }
+
+        const result = await response.json()
+        updateItemResult(item.id, result)
+        updateItemStatus(item.id, 'completed')
       } else {
-        logger.info('Processing regular file', { fileName: item.file instanceof File ? item.file.name : 'unknown' })
-        response = await fetch('/api/convert', {
+        logger.info('Processing regular file', {
+          fileName: item.file instanceof File ? item.file.name : 'unknown'
+        })
+        
+        const formData = new FormData()
+        formData.append('file', item.file)
+        formData.append('format', item.targetFormat)
+
+        const response = await fetch('/api/convert', {
           method: 'POST',
           body: formData,
         })
-      }
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        logger.error('Processing failed', { 
-          fileName: item.file instanceof File ? item.file.name : 'unknown',
-          status: response.status,
-          error: errorData 
-        })
-        throw new Error(errorData.error || 'Failed to process file')
-      }
+        if (!response.ok) {
+          throw new Error('Failed to process file')
+        }
 
-      const result = await response.json()
-      logger.success('Processing completed', { 
-        fileName: item.file instanceof File ? item.file.name : 'unknown',
-        format: result.format,
-        size: result.size 
-      })
-      
-      updateItemResult(item.id, result)
-      updateItemStatus(item.id, 'completed')
-      
+        const result = await response.json()
+        updateItemResult(item.id, result)
+        updateItemStatus(item.id, 'completed')
+      }
     } catch (error) {
-      logger.error('Processing error', { 
+      logger.error('Processing error', {
         fileName: item.file instanceof File ? item.file.name : 'unknown',
-        error 
+        error
       })
       updateItemStatus(item.id, 'error', error instanceof Error ? error.message : 'Unknown error')
     }
@@ -234,6 +225,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
       quality: file.quality || 80,
       status: 'pending',
       previewUrl: URL.createObjectURL(file.file),
+      isLarge: isLargeFile(file.file)
     }))
 
     dispatch({ type: 'ADD_ITEMS', payload: newItems })
