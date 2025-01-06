@@ -42,7 +42,6 @@ type QueueAction =
   | { type: 'RETRY_ITEM'; payload: { id: string; quality?: number } }
 
 const MAX_QUEUE_SIZE = 5
-const LARGE_FILE_THRESHOLD = MAX_DIRECT_UPLOAD_SIZE
 
 const initialState: QueueState = {
   items: [],
@@ -101,11 +100,6 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
     default:
       return state
   }
-}
-
-const isLargeFile = (file: File | Blob | string): boolean => {
-  if (typeof file === 'string') return false
-  return file.size > LARGE_FILE_THRESHOLD
 }
 
 const QueueContext = createContext<{
