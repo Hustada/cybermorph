@@ -2,7 +2,8 @@
 
 A cyberpunk-themed image converter built with Next.js, featuring a sleek, futuristic UI and powerful image processing capabilities.
 
-![CyberMorph Banner](public/og-image.png)
+![Screenshot 2025-01-05 at 9 44 30 PM](https://github.com/user-attachments/assets/f9461a1b-dbba-4618-8215-58436404c9c3)
+
 
 ## 🚀 Features
 
