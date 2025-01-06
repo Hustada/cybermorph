@@ -10,6 +10,8 @@ import ConversionQueue from '@/components/ConversionQueue'
 import CyberBackground from '@/components/CyberBackground'
 import Footer from '@/components/Footer'
 import Welcome from '@/components/Welcome'
+import { logger } from '@/utils/logger'
+import { isLargeFile } from '@/utils/aws'
 
 export default function Home() {
   const [targetFormat, setTargetFormat] = useState('webp')
@@ -75,32 +77,89 @@ export default function Home() {
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     try {
-      await playDropSound()
-      
+      logger.info('Files dropped', { count: acceptedFiles.length })
+      playDropSound()
+
+      // Validate files
       const validFiles = acceptedFiles.filter(file => {
         const isValid = file.type.startsWith('image/')
         if (!isValid) {
-          console.error(`${file.name} is not a valid image file`)
+          logger.warn('Invalid file type', { fileName: file.name, type: file.type })
         }
         return isValid
       })
 
-      if (validFiles.length === 0) return
+      if (validFiles.length === 0) {
+        logger.warn('No valid files dropped')
+        return
+      }
 
-      const items = validFiles.map(file => ({
-        id: crypto.randomUUID(),
-        file,
-        targetFormat: targetFormat || 'webp',
-        quality: 80,
-        status: 'pending' as const,
-        progress: 0,
-        useLocalProcessing: isHackingMode
+      // Process each file
+      const items = await Promise.all(validFiles.map(async (file) => {
+        const isLarge = isLargeFile(file)
+        logger.debug('Processing dropped file', { 
+          fileName: file.name, 
+          size: file.size, 
+          isLarge 
+        })
+
+        if (isLarge) {
+          // For large files, get presigned URL
+          const response = await fetch('/api/convert-large', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileType: file.type,
+            }),
+          })
+
+          if (!response.ok) {
+            logger.error('Failed to get upload URL', { fileName: file.name })
+            throw new Error('Failed to get upload URL')
+          }
+
+          const { uploadUrl, key } = await response.json()
+          
+          // Upload to S3
+          logger.info('Uploading large file to S3', { fileName: file.name })
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type },
+          })
+          logger.success('File uploaded to S3', { fileName: file.name })
+
+          // Add the S3 key to the item
+          return {
+            id: crypto.randomUUID(),
+            file,
+            targetFormat: targetFormat || 'webp',
+            quality: 80,
+            status: 'pending' as const,
+            progress: 0,
+            s3Key: key,
+            useLocalProcessing: isHackingMode
+          }
+        }
+
+        return {
+          id: crypto.randomUUID(),
+          file,
+          targetFormat: targetFormat || 'webp',
+          quality: 80,
+          status: 'pending' as const,
+          progress: 0,
+          useLocalProcessing: isHackingMode
+        }
       }))
+
+      // Add items to queue
       addItems(items)
+      logger.success('Files added to queue', { count: items.length })
       playSubmitSound()
     } catch (error) {
-      console.error('Error handling file drop:', error)
-      console.error('Failed to process dropped files. Please try again.')
+      logger.error('Error handling file drop', { error })
     }
   }, [playDropSound, targetFormat, isHackingMode, addItems, playSubmitSound])
 

@@ -77,7 +77,13 @@ export async function POST(request: NextRequest) {
 
     // Get file buffer
     log.info('Converting File to Buffer')
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const arrayBuffer = await file.arrayBuffer()
+    log.info('File info', { 
+      size: file.size,
+      type: file.type,
+      bufferSize: arrayBuffer.byteLength
+    })
+    const buffer = Buffer.from(arrayBuffer)
 
     // Process based on mode
     log.info(`Processing Mode: ${localMode ? 'Local' : 'Cloud'}`)
@@ -85,7 +91,9 @@ export async function POST(request: NextRequest) {
     if (localMode) {
       return await handleLocalProcessing(buffer, format, quality)
     } else {
+      // Create a proper readable stream
       const stream = new Readable()
+      stream._read = () => {} // Required for custom readable streams
       stream.push(buffer)
       stream.push(null)
       return await handleCloudProcessing(stream, format, quality)
@@ -102,8 +110,26 @@ export async function POST(request: NextRequest) {
 async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, quality: number) {
   log.info('=== Starting Local Processing ===')
   try {
-    log.info('Processing with Sharp', { format, quality })
+    // First verify we can read the image
+    const metadata = await sharp(buffer).metadata()
+    if (!metadata.format) {
+      throw new Error('Could not detect image format')
+    }
+
+    log.info('Input image info', {
+      originalFormat: metadata.format,
+      width: metadata.width,
+      height: metadata.height,
+      channels: metadata.channels,
+      size: buffer.length
+    })
+
+    // Process the image
     let sharpInstance = sharp(buffer)
+      .resize(TARGET_SIZE, TARGET_SIZE, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
 
     // Apply format-specific processing
     switch (format) {
@@ -118,35 +144,32 @@ async function handleLocalProcessing(buffer: Buffer, format: SupportedFormat, qu
         sharpInstance = sharpInstance.jpeg({ quality })
         break
       default:
-        log.error('Unsupported Format', { format })
-        return NextResponse.json(
-          { error: 'Unsupported format' },
-          { status: 400 }
-        )
+        throw new Error(`Unsupported format: ${format}`)
     }
 
+    // Get the processed buffer
     const processedBuffer = await sharpInstance.toBuffer()
-    const metadata = await sharp(processedBuffer).metadata()
+    const processedMetadata = await sharp(processedBuffer).metadata()
 
-    log.success('Local Processing Complete', {
-      format: metadata.format,
-      size: `${(processedBuffer.length / 1024).toFixed(2)}KB`,
-      dimensions: `${metadata.width}x${metadata.height}`
+    log.info('Processing complete', {
+      outputFormat: processedMetadata.format,
+      width: processedMetadata.width,
+      height: processedMetadata.height,
+      size: processedBuffer.length
     })
 
-    // Convert buffer to base64 for response
-    const base64 = processedBuffer.toString('base64')
+    // Return the result
     return NextResponse.json({
-      data: `data:image/${format};base64,${base64}`,
-      format: metadata.format,
+      data: `data:image/${format};base64,${processedBuffer.toString('base64')}`,
+      format: format,
       size: processedBuffer.length,
-      width: metadata.width,
-      height: metadata.height
+      width: processedMetadata.width || 0,
+      height: processedMetadata.height || 0
     })
   } catch (error) {
     log.error('Local Processing Error', { error })
     return NextResponse.json(
-      { error: 'Failed to process image locally' },
+      { error: error instanceof Error ? error.message : 'Failed to process image' },
       { status: 500 }
     )
   }
