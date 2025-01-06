@@ -104,11 +104,10 @@ export default function Home() {
         })
 
         if (isLarge) {
-          // For large files, get presigned URL first
-          logger.info('Requesting presigned URL', { 
-            fileName: file.name,
-            fileType: file.type,
-            fileSize: file.size
+          // For large files, get presigned POST URL first
+          logger.info('Requesting presigned POST URL', { 
+            filename: file.name,
+            contentType: file.type
           })
           
           const response = await fetch('/api/convert-large', {
@@ -117,9 +116,8 @@ export default function Home() {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              fileName: file.name,
-              fileType: file.type,
-              fileSize: file.size
+              filename: file.name,
+              contentType: file.type
             })
           })
 
@@ -133,11 +131,8 @@ export default function Home() {
             throw new Error(errorData.error || 'Failed to get upload URL')
           }
 
-          const { uploadUrl, key } = await response.json()
-          logger.info('Got presigned URL', { 
-            key,
-            uploadUrl: uploadUrl.substring(0, 100) + '...' // Log only part of the URL for security
-          })
+          const { url, fields, key } = await response.json()
+          logger.info('Got presigned POST URL', { key })
           
           // Upload directly to S3
           logger.info('Starting S3 upload', { 
@@ -145,23 +140,28 @@ export default function Home() {
             key
           })
 
-          const uploadResponse = await fetch(uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: {
-              'Content-Type': file.type
-            }
+          const formData = new FormData()
+          Object.entries(fields).forEach(([fieldKey, value]) => {
+            formData.append(fieldKey, value as string)
+          })
+          formData.append('file', file)
+
+          const uploadResponse = await fetch(url, {
+            method: 'POST',
+            body: formData
           })
 
           if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text().catch(() => 'No error details available')
+            const errorText = await uploadResponse.text()
             logger.error('Failed to upload to S3', { 
               fileName: file.name,
               status: uploadResponse.status,
               statusText: uploadResponse.statusText,
-              errorDetails: errorText
+              errorDetails: errorText,
+              fields: fields,
+              url: url
             })
-            throw new Error(`Failed to upload to S3: ${uploadResponse.statusText}`)
+            throw new Error('Failed to upload to S3')
           }
 
           logger.success('Successfully uploaded to S3', { 
