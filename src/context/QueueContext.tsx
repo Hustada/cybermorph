@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react'
 import { logger } from '@/utils/logger'
+import { MAX_DIRECT_UPLOAD_SIZE } from '@/utils/aws'
 
 interface ConversionResult {
   url?: string
@@ -41,7 +42,7 @@ type QueueAction =
   | { type: 'RETRY_ITEM'; payload: { id: string; quality?: number } }
 
 const MAX_QUEUE_SIZE = 5
-const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
+const LARGE_FILE_THRESHOLD = MAX_DIRECT_UPLOAD_SIZE
 
 const initialState: QueueState = {
   items: [],
@@ -149,7 +150,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
       logger.info('Starting item processing', {
         fileName: item.file instanceof File ? item.file.name : 'unknown',
         format: item.targetFormat,
-        isLarge: isLargeFile(item.file)
+        isLarge: item.isLarge
       })
 
       if (item.isLarge && item.s3Key) {

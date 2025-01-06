@@ -3,11 +3,12 @@ import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
 import { v4 as uuidv4 } from 'uuid'
 import { logger } from './logger'
 
-// Max file size for direct upload (4MB)
-export const MAX_FILE_SIZE = 4 * 1024 * 1024
+// Size thresholds
+export const MAX_DIRECT_UPLOAD_SIZE = 4 * 1024 * 1024  // 4MB - Vercel's limit
+export const MAX_S3_UPLOAD_SIZE = 100 * 1024 * 1024    // 100MB - Our S3 limit
 
 export function isLargeFile(file: File): boolean {
-  return file.size > MAX_FILE_SIZE
+  return file.size > MAX_DIRECT_UPLOAD_SIZE
 }
 
 export async function getPresignedPost(filename: string, contentType: string) {
@@ -29,7 +30,7 @@ export async function getPresignedPost(filename: string, contentType: string) {
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
       Conditions: [
-        ['content-length-range', 0, 100 * 1024 * 1024], // up to 100 MB
+        ['content-length-range', 0, MAX_S3_UPLOAD_SIZE], // up to 100 MB
         ['starts-with', '$Content-Type', contentType],
       ],
       Fields: {
