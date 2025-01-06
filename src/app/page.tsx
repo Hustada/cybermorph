@@ -105,6 +105,12 @@ export default function Home() {
 
         if (isLarge) {
           // For large files, get presigned URL first
+          logger.info('Requesting presigned URL', { 
+            fileName: file.name,
+            fileType: file.type,
+            fileSize: file.size
+          })
+          
           const response = await fetch('/api/convert-large', {
             method: 'POST',
             headers: {
@@ -118,14 +124,27 @@ export default function Home() {
           })
 
           if (!response.ok) {
-            logger.error('Failed to get upload URL', { fileName: file.name })
-            throw new Error('Failed to get upload URL')
+            const errorData = await response.json().catch(() => ({}))
+            logger.error('Failed to get upload URL', { 
+              fileName: file.name,
+              status: response.status,
+              error: errorData.error
+            })
+            throw new Error(errorData.error || 'Failed to get upload URL')
           }
 
           const { uploadUrl, key } = await response.json()
+          logger.info('Got presigned URL', { 
+            key,
+            uploadUrl: uploadUrl.substring(0, 100) + '...' // Log only part of the URL for security
+          })
           
           // Upload directly to S3
-          logger.info('Uploading large file to S3', { fileName: file.name })
+          logger.info('Starting S3 upload', { 
+            fileName: file.name,
+            key
+          })
+
           const uploadResponse = await fetch(uploadUrl, {
             method: 'PUT',
             body: file,
@@ -135,41 +154,52 @@ export default function Home() {
           })
 
           if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text().catch(() => 'No error details available')
             logger.error('Failed to upload to S3', { 
               fileName: file.name,
-              status: uploadResponse.status 
+              status: uploadResponse.status,
+              statusText: uploadResponse.statusText,
+              errorDetails: errorText
             })
-            throw new Error('Failed to upload to S3')
+            throw new Error(`Failed to upload to S3: ${uploadResponse.statusText}`)
           }
 
-          logger.success('File uploaded to S3', { fileName: file.name })
+          logger.success('Successfully uploaded to S3', { 
+            fileName: file.name,
+            key 
+          })
+          return { key, file, isLarge: true }
+        } else {
+          // For smaller files, use the regular convert endpoint
+          const formData = new FormData()
+          formData.append('file', file)
 
-          // Add the S3 key to the item
-          return {
-            id: crypto.randomUUID(),
-            file,
-            targetFormat: targetFormat || 'webp',
-            quality: 80,
-            status: 'pending' as const,
-            progress: 0,
-            s3Key: key,
-            useLocalProcessing: isHackingMode
+          const response = await fetch('/api/convert', {
+            method: 'POST',
+            body: formData
+          })
+
+          if (!response.ok) {
+            logger.error('Failed to convert file', { fileName: file.name })
+            throw new Error('Failed to convert file')
           }
-        }
 
-        return {
-          id: crypto.randomUUID(),
-          file,
-          targetFormat: targetFormat || 'webp',
-          quality: 80,
-          status: 'pending' as const,
-          progress: 0,
-          useLocalProcessing: isHackingMode
+          const data = await response.json()
+          return { ...data, file, isLarge: false }
         }
       }))
 
       // Add items to queue
-      addItems(items)
+      addItems(items.map(item => ({
+        id: crypto.randomUUID(),
+        file: item.file,
+        targetFormat: targetFormat || 'webp',
+        quality: 80,
+        status: 'pending' as const,
+        progress: 0,
+        s3Key: item.key,
+        useLocalProcessing: isHackingMode
+      })))
       logger.success('Files added to queue', { count: items.length })
       playSubmitSound()
     } catch (error) {

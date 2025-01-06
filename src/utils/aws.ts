@@ -12,13 +12,16 @@ const s3Client = new S3Client({
 })
 
 // Set threshold lower than Vercel's limit to ensure we use S3 for larger files
-export const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB - well below Vercel's limit
+export const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB - Vercel's limit
 
 export async function getPresignedUploadUrl(fileName: string, contentType: string) {
-  logger.info('Generating presigned URL', { fileName, contentType })
-  
+  if (!process.env.AWS_BUCKET_NAME) {
+    throw new Error('AWS_BUCKET_NAME not configured')
+  }
+
   const key = `uploads/${Date.now()}-${fileName}`
-  
+  logger.info('Generating presigned URL', { fileName, contentType, key })
+
   const command = new PutObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME,
     Key: key,
@@ -26,15 +29,19 @@ export async function getPresignedUploadUrl(fileName: string, contentType: strin
   })
 
   try {
-    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
-    logger.success('Generated presigned URL', { key })
-    return {
-      url: signedUrl,
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+    logger.success('Generated presigned URL', { 
       key,
-    }
+      uploadUrl: uploadUrl.substring(0, 100) + '...' // Log only part of the URL for security
+    })
+    return { uploadUrl, key }
   } catch (error) {
-    logger.error('Failed to generate presigned URL', { error, fileName })
-    throw new Error('Failed to generate upload URL')
+    logger.error('Failed to generate presigned URL', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      fileName,
+      key
+    })
+    throw error
   }
 }
 
