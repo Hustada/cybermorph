@@ -23,7 +23,8 @@ export async function POST(request: NextRequest) {
     logger.info('Environment check', {
       hasAWS: !!process.env.AWS_ACCESS_KEY_ID,
       hasCloudinary: !!process.env.CLOUDINARY_API_KEY,
-      hasLocalMode: !!process.env.LOCAL_MODE_PASSWORD
+      hasLocalMode: !!process.env.LOCAL_MODE_PASSWORD,
+      maxBodySize: process.env.NEXT_PUBLIC_MAX_BODY_SIZE
     })
     
     const formData = await request.formData()
@@ -107,12 +108,17 @@ export async function POST(request: NextRequest) {
       }
     }, { headers })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
     logger.error('Process error', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      error: errorMessage,
+      stack: errorStack,
+      type: error?.constructor?.name
     })
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: errorMessage, stack: errorStack },
       { status: 500, headers }
     )
   }
