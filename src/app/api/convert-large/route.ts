@@ -23,25 +23,48 @@ export async function POST(request: NextRequest) {
   try {
     logger.info('Received large file conversion request')
     
-    // Parse the request
-    const { fileName, fileType } = await request.json()
-    logger.debug('Request details', { fileName, fileType })
+    // Log environment variables
+    logger.info('Environment check', {
+      aws: {
+        region: process.env.AWS_REGION || 'us-east-1',
+        bucket: process.env.AWS_BUCKET_NAME,
+        hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+        hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
+      }
+    })
 
-    if (!fileName || !fileType) {
-      logger.warn('Missing required fields', { fileName, fileType })
+    const formData = await request.formData()
+    const file = formData.get('file')
+
+    if (!file || !(file instanceof File)) {
+      logger.warn('Missing or invalid file')
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing or invalid file' },
         { status: 400 }
       )
     }
 
+    if (!process.env.AWS_BUCKET_NAME) {
+      logger.error('AWS_BUCKET_NAME not configured')
+      return NextResponse.json(
+        { error: 'Server configuration error: AWS_BUCKET_NAME not set' },
+        { status: 500 }
+      )
+    }
+
+    logger.info('Request details', { 
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size
+    })
+
     // Generate a unique key for the file
-    const key = `uploads/${Date.now()}-${fileName}`
+    const key = `uploads/${Date.now()}-${file.name}`
 
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
-      ContentType: fileType,
+      ContentType: file.type,
     })
 
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
@@ -50,9 +73,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ uploadUrl, key })
 
   } catch (error) {
-    logger.error('Error handling large file request', { error })
+    logger.error('Error handling large file request', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    })
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { error: error instanceof Error ? error.message : 'Failed to process request' },
       { status: 500 }
     )
   }

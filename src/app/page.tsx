@@ -105,13 +105,12 @@ export default function Home() {
 
         if (isLarge) {
           // For large files, get presigned URL
+          const formData = new FormData()
+          formData.append('file', file)
+
           const response = await fetch('/api/convert-large', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileName: file.name,
-              fileType: file.type,
-            }),
+            body: formData
           })
 
           if (!response.ok) {
