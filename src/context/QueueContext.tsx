@@ -103,7 +103,7 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 
 const QueueContext = createContext<{
   state: QueueState
-  addItems: (files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean }[]) => void
+  addItems: (files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean; s3Key?: string }[]) => void
   removeItem: (id: string) => void
   clearQueue: () => void
   retryItem: (id: string, quality?: number) => void
@@ -214,7 +214,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   }, [state.items, processItem])
 
   const addItems = useCallback((
-    files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean }[]
+    files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean; s3Key?: string }[]
   ) => {
     const newItems: QueueItem[] = files.map((file) => ({
       id: Math.random().toString(36).substring(7),
@@ -223,7 +223,8 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
       quality: file.quality || 80,
       status: 'pending',
       previewUrl: URL.createObjectURL(file.file),
-      isLarge: file.isLarge
+      isLarge: file.isLarge,
+      s3Key: file.s3Key
     }))
 
     dispatch({ type: 'ADD_ITEMS', payload: newItems })
