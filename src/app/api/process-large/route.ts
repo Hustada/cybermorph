@@ -11,6 +11,7 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true  // Force HTTPS
 })
 
 export async function POST(request: NextRequest) {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
           transformation: [
             { quality: 'auto:good' },
           ],
+          secure: true  // Force HTTPS for this upload
         },
         (error, result) => {
           if (error) reject(error)
