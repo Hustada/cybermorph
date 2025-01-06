@@ -15,5 +15,10 @@
       },
       "continue": true
     }
-  ]
+  ],
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_MAX_BODY_SIZE": "10mb"
+    }
+  }
 }

@@ -11,7 +11,8 @@ const s3Client = new S3Client({
   },
 })
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB - same as current limit
+// Set threshold lower than Vercel's limit to ensure we use S3 for larger files
+export const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB - well below Vercel's limit
 
 export async function getPresignedUploadUrl(fileName: string, contentType: string) {
   logger.info('Generating presigned URL', { fileName, contentType })
