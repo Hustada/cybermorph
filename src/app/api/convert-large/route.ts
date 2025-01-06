@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { logger } from '@/utils/logger'
+import { v2 as cloudinary } from 'cloudinary'
+import { logger } from '@/lib/logger'
 
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION,
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+  }
+})
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
 export const config = {
@@ -20,40 +26,80 @@ export const config = {
 }
 
 export async function POST(request: NextRequest) {
+  const headers = {
+    'Cache-Control': 'no-store, must-revalidate'
+  }
+
   try {
-    logger.info('Received large file conversion request')
-    
-    // Parse the request
-    const { fileName, fileType } = await request.json()
-    logger.debug('Request details', { fileName, fileType })
+    logger.info('🔵 Received large file conversion request')
 
-    if (!fileName || !fileType) {
-      logger.warn('Missing required fields', { fileName, fileType })
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Generate a unique key for the file
-    const key = `uploads/${Date.now()}-${fileName}`
-
-    const command = new PutObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: key,
-      ContentType: fileType,
+    // Log environment status
+    logger.info('🔍 Environment check', {
+      aws: {
+        hasRegion: !!process.env.AWS_REGION,
+        hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+        hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+        hasBucket: !!process.env.AWS_BUCKET_NAME,
+        region: process.env.AWS_REGION
+      },
+      cloudinary: {
+        hasCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+        hasApiKey: !!process.env.CLOUDINARY_API_KEY,
+        hasApiSecret: !!process.env.CLOUDINARY_API_SECRET
+      }
     })
 
-    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
-    logger.success('Generated presigned URL', { key })
+    const formData = await request.formData()
+    const file = formData.get('file')
 
-    return NextResponse.json({ uploadUrl, key })
+    if (!file || !(file instanceof File)) {
+      logger.error('❌ No file provided')
+      return NextResponse.json({ error: 'No file provided' }, { status: 400, headers })
+    }
 
+    logger.info('🔍 Request details', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size
+    })
+
+    // Generate S3 key
+    const key = `uploads/${Date.now()}-${file.name}`
+    const buffer = await file.arrayBuffer()
+
+    // Upload to S3
+    try {
+      await s3Client.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
+        Body: Buffer.from(buffer),
+        ContentType: file.type
+      }))
+      logger.info('✅ File uploaded to S3', { key })
+    } catch (error) {
+      logger.error('❌ S3 upload error', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      })
+      throw error
+    }
+
+    return NextResponse.json({ key }, { headers })
   } catch (error) {
-    logger.error('Error handling large file request', { error })
+    logger.error('❌ Error handling large file request', {
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : error
+    })
+
     return NextResponse.json(
-      { error: 'Failed to process request' },
-      { status: 500 }
+      { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        type: error?.constructor?.name
+      },
+      { status: 500, headers }
     )
   }
 }
