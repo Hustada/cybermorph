@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
 
   try {
     logger.info('Starting large file processing')
+    logger.info('Environment configured via Vercel dashboard')
     
     const formData = await request.formData()
     const file = formData.get('file')
