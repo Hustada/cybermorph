@@ -184,8 +184,7 @@ export default function Home() {
             throw new Error('Failed to convert file')
           }
 
-          const data = await response.json()
-          return { key: null, file, isLarge: false }
+          return { file, isLarge: false }
         }
       }))
 
