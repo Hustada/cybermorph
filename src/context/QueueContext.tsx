@@ -173,7 +173,13 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         }
 
         const result = await response.json()
-        updateItemResult(item.id, result)
+        updateItemResult(item.id, {
+          url: result.secure_url || result.url,
+          format: result.format,
+          size: result.bytes,
+          width: result.width,
+          height: result.height
+        })
         updateItemStatus(item.id, 'completed')
       } else {
         logger.info('Processing regular file', {
