@@ -3,6 +3,11 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { logger } from '@/utils/logger'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
@@ -33,6 +38,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing or invalid file' },
         { status: 400 }
+      )
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      logger.warn('File too large', { size: file.size, maxSize: MAX_FILE_SIZE })
+      return NextResponse.json(
+        { error: 'File too large. Maximum size is 10MB' },
+        { status: 413 }
       )
     }
 

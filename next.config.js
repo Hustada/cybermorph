@@ -8,12 +8,6 @@ const nextConfig = {
       bodySizeLimit: '10mb'
     }
   },
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb'
-    },
-    responseLimit: '10mb'
-  },
   images: {
     domains: ['res.cloudinary.com'],
     unoptimized: true
