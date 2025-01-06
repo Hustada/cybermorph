@@ -15,9 +15,9 @@ cloudinary.config({
 
 export async function POST(request: NextRequest) {
   try {
-    const { key, format } = await request.json()
+    const { key, targetFormat } = await request.json()
 
-    if (!key || !format) {
+    if (!key || !targetFormat) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       cloudinary.uploader.upload(
         presignedUrl,
         {
-          format: format,
+          format: targetFormat,
           transformation: [
             { quality: 'auto:good' },
           ],

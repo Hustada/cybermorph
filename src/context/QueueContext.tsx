@@ -163,7 +163,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
           },
           body: JSON.stringify({
             key: item.s3Key,
-            format: item.targetFormat,
+            targetFormat: item.targetFormat,
             fileName: item.file instanceof File ? item.file.name : 'unknown'
           }),
         })
