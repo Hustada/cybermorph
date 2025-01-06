@@ -10,6 +10,7 @@ import ConversionQueue from '@/components/ConversionQueue'
 import CyberBackground from '@/components/CyberBackground'
 import Footer from '@/components/Footer'
 import Welcome from '@/components/Welcome'
+import SecurityWarning from '@/components/SecurityWarning'
 import { logger } from '@/utils/logger'
 import { isLargeFile } from '@/utils/aws'
 
@@ -20,6 +21,9 @@ export default function Home() {
   const [showHackingModeDialog, setShowHackingModeDialog] = useState(false)
   const [hackingModePassword, setHackingModePassword] = useState('')
   const [showUnauthorized, setShowUnauthorized] = useState(false)
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [isLocked, setIsLocked] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(30) // 30 second timer
 
   const { addItems } = useQueue()
   const { playSubmitSound, playSynthIntro4, playDropSound } = useSound()
@@ -37,6 +41,26 @@ export default function Home() {
     }
     checkHackingMode()
   }, [])
+
+  useEffect(() => {
+    if (failedAttempts >= 3) {
+      setIsLocked(true)
+      setShowHackingModeDialog(false)
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            setFailedAttempts(0)
+            setIsLocked(false)
+            setTimeLeft(30)
+            return 30
+          }
+          return prev - 1
+        })
+      }, 1000)
+      return () => clearInterval(timer)
+    }
+  }, [failedAttempts])
 
   const toggleHackingMode = async () => {
     if (isHackingMode) {
@@ -64,11 +88,18 @@ export default function Home() {
         setIsHackingMode(true)
         setShowHackingModeDialog(false)
         setHackingModePassword('')
+        setFailedAttempts(0)
+        setTimeLeft(30)
       } else {
-        // Play error sound and show unauthorized
+        const newAttempts = failedAttempts + 1
+        setFailedAttempts(newAttempts)
         await playSynthIntro4()
         setShowUnauthorized(true)
-        setTimeout(() => setShowUnauthorized(false), 3000)
+        setHackingModePassword('')
+        
+        if (newAttempts < 3) {
+          setTimeout(() => setShowUnauthorized(false), 3000)
+        }
       }
     } catch (error) {
       console.error('Error enabling hacking mode:', error)
@@ -215,6 +246,16 @@ export default function Home() {
     onDrop,
   })
 
+  // If system is locked, only show the SecurityWarning
+  if (isLocked) {
+    return (
+      <div className="min-h-screen">
+        <CyberBackground />
+        <SecurityWarning timeLeft={timeLeft} />
+      </div>
+    )
+  }
+
   if (showWelcome) {
     return <Welcome onStart={() => setShowWelcome(false)} />
   }
@@ -222,6 +263,108 @@ export default function Home() {
   return (
     <div className="min-h-screen relative">
       <CyberBackground />
+      
+      {/* Password Dialog */}
+      <AnimatePresence>
+        {showHackingModeDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-cyber-black border-2 border-cyber-magenta p-6 rounded-lg shadow-lg max-w-md w-full relative"
+            >
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyber-black px-4 text-cyber-magenta font-mono text-sm">
+                {failedAttempts > 0 && (
+                  <span className="flex items-center gap-2">
+                    Failed Attempts: {failedAttempts}/3
+                    {failedAttempts >= 3 && (
+                      <span className="text-red-500">
+                        Locked for {timeLeft}s
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              
+              <form onSubmit={handleHackingModeSubmit} className="space-y-4">
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-bold text-cyber-magenta mb-2">AUTHORIZATION REQUIRED</h3>
+                  <p className="text-cyber-blue text-sm">Enter access code to proceed</p>
+                </div>
+                
+                <input
+                  type="password"
+                  value={hackingModePassword}
+                  onChange={(e) => setHackingModePassword(e.target.value)}
+                  className="w-full bg-cyber-black border-2 border-cyber-magenta p-2 rounded text-cyber-magenta focus:outline-none focus:ring-2 focus:ring-cyber-blue"
+                  placeholder="Enter access code"
+                  disabled={failedAttempts >= 3}
+                  autoFocus
+                />
+                
+                {failedAttempts >= 3 && (
+                  <motion.div 
+                    className="h-1 bg-cyber-black/50 rounded overflow-hidden mt-2"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <motion.div 
+                      className="h-full bg-cyber-magenta"
+                      initial={{ width: "100%" }}
+                      animate={{ width: "0%" }}
+                      transition={{ duration: timeLeft, ease: "linear" }}
+                    />
+                  </motion.div>
+                )}
+                
+                <div className="flex justify-between items-center mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowHackingModeDialog(false)
+                      setHackingModePassword('')
+                      if (failedAttempts >= 3) {
+                        setFailedAttempts(0)
+                        setTimeLeft(30)
+                      }
+                    }}
+                    className="text-cyber-blue hover:text-cyber-magenta transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={failedAttempts >= 3}
+                    className="bg-cyber-magenta text-black px-4 py-2 rounded hover:bg-cyber-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Unauthorized Message */}
+      <AnimatePresence>
+        {showUnauthorized && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed left-0 right-0 top-4 mx-auto w-[90%] max-w-md z-50 bg-red-950 text-red-100 p-3 rounded shadow-lg border border-red-500 text-center"
+          >
+            ACCESS DENIED: Invalid Authorization Code
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       <main className="relative z-10 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
@@ -270,95 +413,6 @@ export default function Home() {
             </motion.div>
           </div>
 
-          {/* Password Dialog */}
-          <AnimatePresence>
-            {showHackingModeDialog && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                transition={{ type: "spring", duration: 0.5 }}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-              >
-                <div className="bg-cyber-black border border-cyber-cyan/30 p-6 rounded-lg shadow-xl 
-                  shadow-cyber-cyan/20 max-w-md w-full mx-4"
-                >
-                  <h3 className="text-xl font-bold mb-4 text-cyber-cyan">Enter Hacking Mode Password</h3>
-                  <form onSubmit={handleHackingModeSubmit} className="space-y-4">
-                    <input
-                      type="password"
-                      value={hackingModePassword}
-                      onChange={(e) => setHackingModePassword(e.target.value)}
-                      className="w-full px-4 py-2 rounded bg-cyber-black/50 border border-cyber-cyan/30
-                        focus:border-cyber-magenta focus:outline-none text-cyber-cyan"
-                      placeholder="Password"
-                      autoFocus
-                    />
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowHackingModeDialog(false)
-                          setHackingModePassword('')
-                        }}
-                        className="px-4 py-2 text-cyber-cyan hover:text-cyber-magenta transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-cyber-cyan/20 text-cyber-cyan rounded 
-                          hover:bg-cyber-magenta/20 hover:text-cyber-magenta transition-all duration-300
-                          border border-cyber-cyan/30 hover:border-cyber-magenta/30"
-                      >
-                        Enable Hacking Mode
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Unauthorized Message */}
-          <AnimatePresence>
-            {showUnauthorized && (
-              <motion.div
-                initial={{ opacity: 0, scale: 1.2 }}
-                animate={{ 
-                  opacity: [0, 1, 1, 0.8, 1, 0.5, 1],
-                  scale: [1.2, 1, 1.1, 0.9, 1.05, 0.95, 1],
-                  x: [0, -10, 10, -5, 5, 0]
-                }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ 
-                  duration: 1.5,
-                  times: [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1],
-                  ease: "easeInOut"
-                }}
-                className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
-              >
-                <div className="relative">
-                  <motion.div
-                    animate={{
-                      opacity: [1, 0.5, 1],
-                      scale: [1, 1.1, 1]
-                    }}
-                    transition={{
-                      duration: 0.5,
-                      repeat: Infinity,
-                      repeatType: "reverse"
-                    }}
-                    className="absolute inset-0 bg-cyber-magenta/20 blur-xl"
-                  />
-                  <div className="text-6xl font-bold text-cyber-magenta border-2 border-cyber-magenta px-8 py-4 bg-cyber-black/80 shadow-lg shadow-cyber-magenta/50">
-                    UNAUTHORIZED ACCESS
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
           {/* Upload Zone */}
           <motion.div 
             className="bg-cyber-charcoal/30 backdrop-blur-sm rounded-lg p-8 mb-8 border border-cyber-cyan/20 glow-hover"
