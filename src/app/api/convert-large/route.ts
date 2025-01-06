@@ -30,19 +30,19 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const formData = await request.formData()
-    const file = formData.get('file')
+    const body = await request.json()
+    const { fileName, fileType, fileSize } = body
 
-    if (!file || !(file instanceof File)) {
-      logger.warn('Missing or invalid file')
+    if (!fileName || !fileType) {
+      logger.warn('Missing file details')
       return NextResponse.json(
-        { error: 'Missing or invalid file' },
+        { error: 'Missing file details' },
         { status: 400 }
       )
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      logger.warn('File too large', { size: file.size, maxSize: MAX_FILE_SIZE })
+    if (fileSize > MAX_FILE_SIZE) {
+      logger.warn('File too large', { size: fileSize, maxSize: MAX_FILE_SIZE })
       return NextResponse.json(
         { error: 'File too large. Maximum size is 10MB' },
         { status: 413 }
@@ -58,18 +58,18 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Request details', { 
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size
+      fileName: fileName,
+      fileType: fileType,
+      fileSize: fileSize
     })
 
     // Generate a unique key for the file
-    const key = `uploads/${Date.now()}-${file.name}`
+    const key = `uploads/${Date.now()}-${fileName}`
 
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
-      ContentType: file.type,
+      ContentType: fileType,
     })
 
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })

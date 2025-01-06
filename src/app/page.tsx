@@ -104,13 +104,17 @@ export default function Home() {
         })
 
         if (isLarge) {
-          // For large files, get presigned URL
-          const formData = new FormData()
-          formData.append('file', file)
-
+          // For large files, get presigned URL first
           const response = await fetch('/api/convert-large', {
             method: 'POST',
-            body: formData
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: file.size
+            })
           })
 
           if (!response.ok) {
@@ -120,13 +124,24 @@ export default function Home() {
 
           const { uploadUrl, key } = await response.json()
           
-          // Upload to S3
+          // Upload directly to S3
           logger.info('Uploading large file to S3', { fileName: file.name })
-          await fetch(uploadUrl, {
+          const uploadResponse = await fetch(uploadUrl, {
             method: 'PUT',
             body: file,
-            headers: { 'Content-Type': file.type },
+            headers: {
+              'Content-Type': file.type
+            }
           })
+
+          if (!uploadResponse.ok) {
+            logger.error('Failed to upload to S3', { 
+              fileName: file.name,
+              status: uploadResponse.status 
+            })
+            throw new Error('Failed to upload to S3')
+          }
+
           logger.success('File uploaded to S3', { fileName: file.name })
 
           // Add the S3 key to the item
