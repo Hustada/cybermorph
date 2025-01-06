@@ -11,14 +11,6 @@ const s3Client = new S3Client({
   },
 })
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb'
-    }
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     logger.info('Received large file conversion request')
