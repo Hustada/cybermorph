@@ -110,7 +110,7 @@ const isLargeFile = (file: File | Blob | string): boolean => {
 
 const QueueContext = createContext<{
   state: QueueState
-  addItems: (files: { file: File; targetFormat: string; quality?: number }[]) => void
+  addItems: (files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean }[]) => void
   removeItem: (id: string) => void
   clearQueue: () => void
   retryItem: (id: string, quality?: number) => void
@@ -217,7 +217,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   }, [state.items, processItem])
 
   const addItems = useCallback((
-    files: { file: File; targetFormat: string; quality?: number }[]
+    files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean }[]
   ) => {
     const newItems: QueueItem[] = files.map((file) => ({
       id: Math.random().toString(36).substring(7),
@@ -226,7 +226,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
       quality: file.quality || 80,
       status: 'pending',
       previewUrl: URL.createObjectURL(file.file),
-      isLarge: isLargeFile(file.file)
+      isLarge: file.isLarge
     }))
 
     dispatch({ type: 'ADD_ITEMS', payload: newItems })
