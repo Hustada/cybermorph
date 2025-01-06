@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react'
 import { logger } from '@/utils/logger'
-import { MAX_DIRECT_UPLOAD_SIZE } from '@/utils/aws'
 
 interface ConversionResult {
   url?: string
