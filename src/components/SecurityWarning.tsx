@@ -55,7 +55,7 @@ export default function SecurityWarning({ timeLeft }: SecurityWarningProps) {
           </div>
 
           <div className="mt-8 p-4 bg-black/30 rounded border border-red-500/30 text-red-300/70 text-sm italic">
-            If you thought "hacking mode" was a real thing, we suggest taking a break and Googling "basic security principles." Spoiler: You're not the main character. Idiot.
+            If you thought &ldquo;hacking mode&rdquo; was a real thing, we suggest taking a break and Googling &ldquo;basic security principles.&rdquo; Spoiler: You&apos;re not the main character. Idiot.
           </div>
         </div>
 
