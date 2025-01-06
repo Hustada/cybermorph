@@ -20,6 +20,11 @@ export async function POST(request: NextRequest) {
   try {
     logger.info('Starting large file processing')
     logger.info('Environment configured via Vercel dashboard')
+    logger.info('Environment check', {
+      hasAWS: !!process.env.AWS_ACCESS_KEY_ID,
+      hasCloudinary: !!process.env.CLOUDINARY_API_KEY,
+      hasLocalMode: !!process.env.LOCAL_MODE_PASSWORD
+    })
     
     const formData = await request.formData()
     const file = formData.get('file')
@@ -103,7 +108,8 @@ export async function POST(request: NextRequest) {
     }, { headers })
   } catch (error) {
     logger.error('Process error', { 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     })
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
