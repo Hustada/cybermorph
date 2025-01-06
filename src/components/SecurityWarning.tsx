@@ -53,6 +53,10 @@ export default function SecurityWarning({ timeLeft }: SecurityWarningProps) {
             <span>Reference ID: {Math.random().toString(36).substring(2, 15).toUpperCase()}</span>
             <span className="text-red-500 font-mono">System unlock in: {timeLeft}s</span>
           </div>
+
+          <div className="mt-8 p-4 bg-black/30 rounded border border-red-500/30 text-red-300/70 text-sm italic">
+            If you thought "hacking mode" was a real thing, we suggest taking a break and Googling "basic security principles." Spoiler: You're not the main character. Idiot.
+          </div>
         </div>
 
         <motion.div 
