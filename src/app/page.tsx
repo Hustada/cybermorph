@@ -11,6 +11,7 @@ import CyberBackground from '@/components/CyberBackground'
 import Footer from '@/components/Footer'
 import Welcome from '@/components/Welcome'
 import SecurityWarning from '@/components/SecurityWarning'
+import LoadingQueue from '@/components/LoadingQueue'
 import { logger } from '@/utils/logger'
 import { isLargeFile } from '@/utils/aws'
 
@@ -25,7 +26,7 @@ export default function Home() {
   const [isLocked, setIsLocked] = useState(false)
   const [timeLeft, setTimeLeft] = useState(30) // 30 second timer
 
-  const { addItems } = useQueue()
+  const { addItems, state } = useQueue()
   const { playSubmitSound, playSynthIntro4, playDropSound } = useSound()
 
   // Check hacking mode status on mount
@@ -483,7 +484,11 @@ export default function Home() {
           </motion.div>
 
           {/* Queue Component */}
-          <ConversionQueue />
+          {state.isLoading ? (
+            <LoadingQueue />
+          ) : (
+            <ConversionQueue />
+          )}
         </div>
       </main>
 

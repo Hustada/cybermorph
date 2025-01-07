@@ -29,6 +29,7 @@ export interface QueueItem {
 interface QueueState {
   items: QueueItem[]
   error?: string
+  isLoading: boolean
 }
 
 type QueueAction =
@@ -38,12 +39,14 @@ type QueueAction =
   | { type: 'CLEAR_QUEUE' }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'RETRY_ITEM'; payload: { id: string; quality?: number } }
 
 const MAX_QUEUE_SIZE = 5
 
 const initialState: QueueState = {
   items: [],
+  isLoading: false,
 }
 
 function queueReducer(state: QueueState, action: QueueAction): QueueState {
@@ -82,6 +85,11 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
         ...state,
         error: undefined,
       }
+    case 'SET_LOADING':
+      return {
+        ...state,
+        isLoading: action.payload,
+      }
     case 'RETRY_ITEM':
       return {
         ...state,
@@ -107,8 +115,8 @@ const QueueContext = createContext<{
   removeItem: (id: string) => void
   clearQueue: () => void
   retryItem: (id: string, quality?: number) => void
-  processQueue: () => Promise<void>
-} | null>(null)
+  processItem: (item: QueueItem) => Promise<void>
+} | undefined>(undefined)
 
 export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(queueReducer, initialState)
@@ -212,29 +220,34 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
     }
   }, [updateItemStatus, updateItemResult])
 
-  const processQueue = useCallback(async () => {
-    const pendingItems = state.items.filter(item => item.status === 'pending')
-    for (const item of pendingItems) {
-      await processItem(item)
-    }
-  }, [state.items, processItem])
-
-  const addItems = useCallback((
+  const addItems = useCallback(async (
     files: { file: File; targetFormat: string; quality?: number; isLarge?: boolean; s3Key?: string }[]
   ) => {
-    const newItems: QueueItem[] = files.map((file) => ({
-      id: Math.random().toString(36).substring(7),
-      file: file.file,
-      targetFormat: file.targetFormat,
-      quality: file.quality || 80,
-      status: 'pending',
-      previewUrl: URL.createObjectURL(file.file),
-      isLarge: file.isLarge,
-      s3Key: file.s3Key
-    }))
+    dispatch({ type: 'SET_LOADING', payload: true })
+    try {
+      const newItems: QueueItem[] = files.map((file) => ({
+        id: Math.random().toString(36).substring(7),
+        file: file.file,
+        targetFormat: file.targetFormat,
+        quality: file.quality || 75,
+        status: 'pending',
+        isLarge: file.isLarge,
+        s3Key: file.s3Key,
+      }))
 
-    dispatch({ type: 'ADD_ITEMS', payload: newItems })
-  }, [])
+      dispatch({ type: 'ADD_ITEMS', payload: newItems })
+
+      // Process each item
+      for (const item of newItems) {
+        await processItem(item)
+      }
+    } catch (error) {
+      logger.error('Error adding items to queue', { error })
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to add items to queue' })
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }, [processItem])
 
   const removeItem = useCallback((id: string) => {
     const item = state.items.find(item => item.id === id)
@@ -263,7 +276,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
     removeItem,
     clearQueue,
     retryItem,
-    processQueue,
+    processItem,
   }
 
   return (

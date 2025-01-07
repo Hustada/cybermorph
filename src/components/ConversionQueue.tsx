@@ -8,7 +8,7 @@ import { useSound } from '@/context/SoundContext'
 import NeuralProcessing from './NeuralProcessing'
 
 export default function ConversionQueue() {
-  const { state, removeItem, clearQueue, processQueue } = useQueue()
+  const { state, removeItem, clearQueue } = useQueue()
   const { playDownloadSound, playSubmitSound } = useSound()
   const [showNeuralProcessing, setShowNeuralProcessing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -84,8 +84,7 @@ export default function ConversionQueue() {
 
   const handleNeuralComplete = useCallback(async () => {
     setIsProcessing(false)
-    await processQueue()
-  }, [processQueue])
+  }, [])
 
   useEffect(() => {
     return () => {
